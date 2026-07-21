@@ -38,8 +38,11 @@ import androidx.navigation.navArgument
 import com.pianokids.ui.home.HomeScreen
 import com.pianokids.ui.learn.LearnScreen
 import com.pianokids.ui.learn.LessonScreen
+import com.pianokids.ui.library.LibraryScreen
+import com.pianokids.ui.library.PieceEditorScreen
 import com.pianokids.ui.pet.PetScreen
 import com.pianokids.ui.practice.PracticeScreen
+import com.pianokids.ui.scan.ScanScreen
 import com.pianokids.ui.tuner.TunerScreen
 
 // ============== 路由 ==============
@@ -51,8 +54,12 @@ object Routes {
     const val PRACTICE = "practice"
     const val PET = "pet"
     const val LESSON = "lesson/{lessonId}"
+    const val LIBRARY = "library"
+    const val PIECE_EDITOR = "piece_editor/{pieceId}"
+    const val SCAN = "scan"
 
     fun lesson(lessonId: String) = "lesson/$lessonId"
+    fun pieceEditor(pieceId: Long) = "piece_editor/$pieceId"
 }
 
 /**
@@ -157,7 +164,11 @@ fun PianoKidsApp() {
                 TunerScreen()
             }
             composable(Routes.PRACTICE) {
-                PracticeScreen()
+                PracticeScreen(
+                    onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
+                    onCreateNew = { navController.navigate(Routes.pieceEditor(-1L)) },
+                    onScan = { navController.navigate(Routes.SCAN) },
+                )
             }
             composable(Routes.PET) {
                 PetScreen()
@@ -172,6 +183,41 @@ fun PianoKidsApp() {
                 LessonScreen(
                     lessonId = lessonId,
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.LIBRARY) {
+                LibraryScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreateNew = { navController.navigate(Routes.pieceEditor(-1L)) },
+                    onScan = { navController.navigate(Routes.SCAN) },
+                    onEditPiece = { pieceId ->
+                        navController.navigate(Routes.pieceEditor(pieceId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.PIECE_EDITOR,
+                arguments = listOf(
+                    navArgument("pieceId") { type = NavType.LongType; defaultValue = -1L },
+                ),
+            ) { backStackEntry ->
+                val pieceId = backStackEntry.arguments?.getLong("pieceId") ?: -1L
+                PieceEditorScreen(
+                    pieceId = pieceId,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { _ ->
+                        // 保存成功后回到乐谱库
+                        navController.popBackStack(Routes.LIBRARY, inclusive = false)
+                    },
+                )
+            }
+            composable(Routes.SCAN) {
+                ScanScreen(
+                    onBack = { navController.popBackStack() },
+                    onEditSequence = {
+                        // 拍照识谱识别完成后，进入编辑器新建乐谱
+                        navController.navigate(Routes.pieceEditor(-1L))
+                    },
                 )
             }
         }

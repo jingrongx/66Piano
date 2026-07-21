@@ -7,7 +7,10 @@ import com.pianokids.audio.AudioCapture
 import com.pianokids.audio.PianoListeningService
 import com.pianokids.audio.PitchDetector
 import com.pianokids.audio.PitchResult
+import com.pianokids.data.db.PieceEntity
+import com.pianokids.data.repo.PiecesRepository
 import com.pianokids.data.repo.ProgressRepository
+import com.pianokids.music.Note
 import androidx.compose.ui.graphics.Color
 import com.pianokids.ui.theme.Correct
 import com.pianokids.ui.theme.Warning
@@ -48,7 +51,7 @@ enum class NoteStatus {
 }
 
 /**
- * 练习界面 UI 状态。
+ * 练琴界面 UI 状态。
  */
 data class PracticeUiState(
     val selectedSong: String? = null,
@@ -61,20 +64,28 @@ data class PracticeUiState(
 )
 
 /**
- * 可选曲目信息。
+ * 可选曲目信息（统一内置和自定义）。
+ *
+ * @property id 内置曲目为字符串 id（如 "twinkle"），自定义乐谱为 "piece_<dbId>"
+ * @property title 标题
+ * @property subtitle 副标题
+ * @property notes MIDI 音符序列（休止符已过滤）
+ * @property isCustom 是否为自定义乐谱
  */
 data class SongItem(
     val id: String,
     val title: String,
     val subtitle: String,
-    val notes: List<Int>, // MIDI 音符序列
+    val notes: List<Int>,
+    val isCustom: Boolean = false,
 )
 
 /**
  * 练琴界面 ViewModel。
  *
- * 曲目选择（P1 仅"小星星"），选中后进入练琴模式，
- * 实时检测孩子弹的音并高亮反馈。
+ * 曲目来源：
+ * - 内置：小星星等
+ * - 自定义：从 [PiecesRepository] 加载（含拍照识谱/导入）
  */
 @HiltViewModel
 class PracticeViewModel @Inject constructor(
@@ -82,6 +93,7 @@ class PracticeViewModel @Inject constructor(
     private val pitchDetector: PitchDetector,
     private val audioCapture: AudioCapture,
     private val progressRepository: ProgressRepository,
+    private val piecesRepository: PiecesRepository,
 ) : ViewModel() {
 
     companion object {
@@ -94,17 +106,25 @@ class PracticeViewModel @Inject constructor(
             val octave = midi / 12 - 1
             return NOTE_NAMES[midi % 12] + octave
         }
+
+        /** 自定义乐谱 id 前缀 */
+        const val PIECE_ID_PREFIX = "piece_"
     }
 
-    /** 可选曲目列表 */
-    val songs: List<SongItem> = listOf(
+    /** 内置曲目 */
+    val builtinSongs: List<SongItem> = listOf(
         SongItem(
             id = "twinkle",
             title = "小星星",
             subtitle = "C 大调 · 入门",
             notes = TWINKLE_NOTES,
+            isCustom = false,
         ),
     )
+
+    /** 自定义曲目（异步加载） */
+    private val _customSongs = MutableStateFlow<List<SongItem>>(emptyList())
+    val customSongs: StateFlow<List<SongItem>> = _customSongs.asStateFlow()
 
     private val _uiState = MutableStateFlow(PracticeUiState())
     val uiState: StateFlow<PracticeUiState> = _uiState.asStateFlow()
@@ -124,6 +144,32 @@ class PracticeViewModel @Inject constructor(
         viewModelScope.launch {
             pitchDetector.pitches.collect { result -> handlePitch(result) }
         }
+        // 加载自定义乐谱
+        viewModelScope.launch {
+            piecesRepository.observeAll().collect { entities ->
+                _customSongs.value = entities.map { it.toSongItem() }
+            }
+        }
+    }
+
+    /**
+     * 把数据库实体转为 [SongItem]。
+     */
+    private fun PieceEntity.toSongItem(): SongItem {
+        val seq = piecesRepository.toSequence(this)
+        val notes = seq.notes.filter { it.midi != Note.REST_MIDI }.map { it.midi }
+        val tag = when (source) {
+            "SCAN" -> "📷 拍照识谱"
+            "MIDI" -> "MIDI 导入"
+            else -> "✏️ 自定义"
+        }
+        return SongItem(
+            id = PIECE_ID_PREFIX + id,
+            title = title,
+            subtitle = "$tag · $tempo BPM",
+            notes = notes,
+            isCustom = true,
+        )
     }
 
     /**
@@ -185,7 +231,6 @@ class PracticeViewModel @Inject constructor(
                 )
                 viewModelScope.launch {
                     _snackbar.emit("太棒了！整首曲子弹完啦！")
-                    // 记录练习会话
                     progressRepository.recordSession(
                         lessonId = "practice_${state.selectedSong}",
                         durationMs = 0L,
@@ -194,7 +239,6 @@ class PracticeViewModel @Inject constructor(
                     handling = false
                 }
             } else {
-                // 高亮下一个
                 newNotes[newIndex] = newNotes[newIndex].copy(status = NoteStatus.CURRENT)
                 _uiState.value = state.copy(
                     notes = newNotes,
@@ -212,13 +256,10 @@ class PracticeViewModel @Inject constructor(
             handling = true
             val newNotes = state.notes.toMutableList()
             newNotes[state.currentIndex] = currentNote.copy(status = NoteStatus.WRONG)
-            // 计算错误后的得分：每错一次扣分
-            val newScore = state.correctCount.toFloat() / state.notes.size
             _uiState.value = state.copy(notes = newNotes)
             viewModelScope.launch {
                 _snackbar.emit("再试一次~")
                 kotlinx.coroutines.delay(500)
-                // 恢复为 CURRENT
                 val s = _uiState.value
                 val restored = s.notes.toMutableList()
                 if (restored.size > s.currentIndex) {

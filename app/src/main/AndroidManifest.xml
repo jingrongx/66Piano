@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 保持屏幕常亮：练琴时不息屏 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 相机：拍照识谱/导入乐谱 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 读取存储：从相册选择图片 -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <application
         android:name=".PianoKidsApp"

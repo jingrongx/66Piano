@@ -55,7 +55,6 @@ class MidiParser {
         if (data.size < 14) {
             throw IllegalArgumentException("MIDI 文件过短: ${data.size} bytes")
         }
-
         // 1. header chunk
         val cur = Cursor(data, 0)
         val headerId = cur.readAscii(4)
@@ -343,4 +342,29 @@ class MidiParser {
             if (target > position) position = target
         }
     }
+}
+
+/**
+ * 将 [MidiFile] 转换为统一 [NoteSequence] 数据模型。
+ *
+ * tick -> ms：ms = tick * tempo(us/quarter) / ticksPerQuarter / 1000
+ */
+fun MidiFile.toNoteSequence(title: String = ""): NoteSequence {
+    val tempoUs = if (tempo in 1..600) 60_000_000 / tempo else 500_000
+    val notes = this.notes.map { n ->
+        val startMs = n.startTimeTicks * tempoUs / ticksPerQuarter / 1000
+        val durMs = n.durationTicks * tempoUs / ticksPerQuarter / 1000
+        Note(
+            midi = n.midiNote,
+            startMs = startMs,
+            durationMs = durMs.coerceAtLeast(80L),
+        )
+    }
+    return NoteSequence(
+        title = title,
+        tempo = tempo,
+        notes = notes,
+        durationMs = durationMs,
+        source = NoteSequence.Source.MIDI,
+    )
 }
