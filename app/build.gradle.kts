@@ -35,6 +35,9 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // 临时使用 debug 签名，保证 release APK 可直接安装
+            // 正式发布时替换为正式 keystore（通过 signingConfigs.create + 环境变量读取）
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
