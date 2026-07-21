@@ -159,7 +159,7 @@ class SheetMusicRecognizer {
             wB += hist[i]
             if (wB == 0) continue
             val wF = total - wB
-            if (wF == 0) break
+            if (wF == 0f) break
             sumB += i * hist[i].toFloat()
             val mB = sumB / wB
             val mF = (sumAll - sumB) / wF
@@ -222,7 +222,7 @@ class SheetMusicRecognizer {
         var best: List<Int>? = null
         var bestError = Long.MAX_VALUE
         for (i in sorted.indices) {
-            for (j in i + 1 until sorted.indices.size) {
+            for (j in i + 1 until sorted.size) {
                 val y1 = sorted[i]
                 val y5 = sorted[j]
                 if (y5 <= y1) continue
