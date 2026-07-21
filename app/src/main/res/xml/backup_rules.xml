@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 应用数据库：练琴记录、课程进度、自定义乐谱 -->
+    <include domain="database" path="." />
+    <!-- DataStore 偏好：星星、宠物等级、装扮、TTS 开关、家长 PIN 等 -->
+    <include domain="sharedpref" path="." />
+    <!-- 应用内部文件 -->
+    <include domain="file" path="." />
+</full-backup-content>

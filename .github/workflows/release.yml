@@ -1,0 +1,191 @@
+name: Release
+
+# 触发条件：
+# 1. push 到 main 分支 → 自动递增版本号 + 打 tag + 发版
+# 2. 推送 v* 形式的 tag → 自动发版（手动控制版本）
+# 3. 在 Actions 页面手动触发（输入版本号）
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 1.0.0，无需 v 前缀）'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write  # 创建 Release、推送 tag/commit 需要写权限
+
+jobs:
+  release:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 自动版本递增需要完整 git 历史
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ -z "${{ github.event.ref }}" ]; then
+            # 兜底：不应进入此分支
+            VERSION="0.0.1"
+            TAG="v$VERSION"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # 推 tag 触发
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手动触发
+            VERSION="${{ github.event.inputs.version }}"
+            TAG="v$VERSION"
+          else
+            # push 到 main 分支：自动递增版本号
+            # 取最新 tag 作为基准
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            BASE_VERSION="${LATEST_TAG#v}"
+            MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
+            MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
+            PATCH=$(echo "$BASE_VERSION" | cut -d. -f3)
+            # 默认递增 patch
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            TAG="v$VERSION"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          # 版本号必须形如 x.y.z
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::版本号格式错误：$VERSION（应为 x.y.z）"
+            exit 1
+          fi
+          echo "Computed version: $VERSION (tag: $TAG)"
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Accept Android SDK Licenses
+        run: (echo "y"; echo "y"; echo "y"; echo "y"; echo "y"; echo "y"; echo "y"; echo "y") | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Generate Gradle Wrapper (if missing)
+        run: gradle wrapper --gradle-version 8.7 --distribution-type bin
+
+      - name: Bump versionCode & versionName
+        run: |
+          # 把 versionCode 改为：major*10000 + minor*100 + patch
+          # 把 versionName 改为 tag 对应的 x.y.z
+          VERSION="${{ steps.ver.outputs.version }}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          sed -i -E "s/versionCode = [0-9]+/versionCode = $CODE/" app/build.gradle.kts
+          sed -i -E "s/versionName = \"[^\"]+\"/versionName = \"$VERSION\"/" app/build.gradle.kts
+          echo "Bumped: versionName=$VERSION, versionCode=$CODE"
+          grep -E 'versionCode|versionName' app/build.gradle.kts
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Rename APK to PianoKids-v<version>.apk
+        id: apk
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          SRC="app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ ! -f "$SRC" ]; then
+            # 某些 AGP 版本输出 app-release.apk
+            SRC="app/build/outputs/apk/release/app-release.apk"
+          fi
+          DST="PianoKids-v${VERSION}.apk"
+          cp "$SRC" "$DST"
+          echo "path=$DST" >> $GITHUB_OUTPUT
+          ls -lh "$DST"
+
+      - name: Generate changelog (release notes)
+        run: |
+          # 用最近 30 条提交生成更新内容
+          {
+            echo "## PianoKids v${{ steps.ver.outputs.version }}"
+            echo ""
+            echo "**更新时间**：$(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo "### 更新内容"
+            git log -30 --pretty=format:'- %s (%h)' --no-merges
+          } > CHANGELOG.md
+          cat CHANGELOG.md
+
+      - name: Generate latest.json (in-app update manifest)
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          TAG="${{ steps.ver.outputs.tag }}"
+          # 直链（GitHub 官方）
+          APK_URL_DIRECT="https://github.com/jingrongx/66Piano/releases/download/${TAG}/PianoKids-v${VERSION}.apk"
+          # ghproxy 加速地址：用户在国内时由 App 自动拼接
+          APK_URL_PROXY="https://ghproxy.net/${APK_URL_DIRECT}"
+          # latest.json 同样通过 ghproxy 加速
+          LATEST_JSON_PROXY="https://ghproxy.net/https://github.com/jingrongx/66Piano/releases/latest/download/latest.json"
+          # 读取 versionCode
+          CODE=$(grep -E '^\s*versionCode' app/build.gradle.kts | head -1 | grep -oE '[0-9]+')
+          # 生成 JSON
+          cat > latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "versionCode": ${CODE},
+            "tagName": "${TAG}",
+            "apkUrl": "${APK_URL_DIRECT}",
+            "apkUrlProxy": "${APK_URL_PROXY}",
+            "manifestUrlProxy": "${LATEST_JSON_PROXY}",
+            "releaseNotes": $(jq -Rs '.' < CHANGELOG.md),
+            "publishedAt": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+          cat latest.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: PianoKids ${{ steps.ver.outputs.tag }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: |
+            ${{ steps.apk.outputs.path }}
+            latest.json
+          generate_release_notes: true  # GitHub 自动生成 release notes（与 CHANGELOG.md 合并）
+
+      - name: Push version bump commit & tag back to repo
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          git commit -m "chore(release): bump version to ${{ steps.ver.outputs.version }}" || echo "nothing to commit"
+          git push origin HEAD:main
+          git tag ${{ steps.ver.outputs.tag }}
+          git push origin ${{ steps.ver.outputs.tag }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pianokids-release-apk-v${{ steps.ver.outputs.version }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: warn
