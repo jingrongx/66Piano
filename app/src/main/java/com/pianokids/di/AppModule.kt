@@ -7,12 +7,15 @@ import com.pianokids.audio.NoteRecognizer
 import com.pianokids.audio.PitchDetector
 import com.pianokids.data.db.AchievementDao
 import com.pianokids.data.db.PianoDatabase
+import com.pianokids.data.db.PieceDao
 import com.pianokids.data.db.PracticeDao
 import com.pianokids.data.db.ProgressDao
 import com.pianokids.data.prefs.UserPreferences
+import com.pianokids.data.repo.PiecesRepository
 import com.pianokids.data.repo.ProgressRepository
 import com.pianokids.music.DtwMatcher
 import com.pianokids.music.MidiParser
+import com.pianokids.scan.SheetMusicRecognizer
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,11 +29,11 @@ import javax.inject.Singleton
  * 以下类已用 `@Singleton` + `@Inject constructor` 标注，Hilt 可自动构造，
  * 无需在此声明：
  * - [AudioCapture] / [PitchDetector] / [NoteRecognizer]
- * - [UserPreferences] / [ProgressRepository]
+ * - [UserPreferences] / [ProgressRepository] / [PiecesRepository]
  *
  * 本模块只提供：
- * - [PianoDatabase]（需 Room builder）+ 三个 DAO
- * - [MidiParser] / [DtwMatcher]（无状态工具类，单例化避免重复创建）
+ * - [PianoDatabase]（需 Room builder）+ 四个 DAO
+ * - [MidiParser] / [DtwMatcher] / [SheetMusicRecognizer]（无状态工具类，单例化避免重复创建）
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -61,6 +64,9 @@ object AppModule {
     @Provides
     fun providePracticeDao(db: PianoDatabase): PracticeDao = db.practiceDao()
 
+    @Provides
+    fun providePieceDao(db: PianoDatabase): PieceDao = db.pieceDao()
+
     // ============== 音乐工具 ==============
 
     /**
@@ -76,4 +82,11 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDtwMatcher(): DtwMatcher = DtwMatcher()
+
+    /**
+     * [SheetMusicRecognizer] 是无状态图像识别工具，提供单例。
+     */
+    @Provides
+    @Singleton
+    fun provideSheetMusicRecognizer(): SheetMusicRecognizer = SheetMusicRecognizer()
 }

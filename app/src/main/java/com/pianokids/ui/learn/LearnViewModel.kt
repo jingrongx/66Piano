@@ -61,10 +61,23 @@ class LearnViewModel @Inject constructor(
             initialValue = emptyMap(),
         )
 
+    /** 已完成课程 id 集合（stars > 0 视为完成） */
+    val completedIds: StateFlow<Set<String>> = progressRepository.observeProgress()
+        .map { list -> list.filter { it.stars > 0 }.map { it.lessonId }.toSet() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptySet(),
+        )
+
     /**
-     * 判断某课是否解锁。P1 中仅 [LESSON_1] 解锁。
+     * 判断某课是否解锁。
+     * 规则：lesson_1 默认解锁；后续需上一课完成。
      */
-    fun isUnlocked(lessonId: String): Boolean = lessonId == LESSON_1
+    fun isUnlocked(lessonId: String): Boolean {
+        val unlocked = LessonCatalog.unlockedLessonIds(completedIds.value)
+        return lessonId in unlocked
+    }
 
     companion object {
         const val LESSON_1 = "lesson_1"

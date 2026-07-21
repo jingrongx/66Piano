@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checkroom
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -25,12 +24,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,10 +46,13 @@ import com.pianokids.ui.theme.YellowLight
 /**
  * 豆豆宠物界面。
  *
- * 大大的豆豆形象 + 等级 + 经验条 + 互动语 + 装扮商店入口（P1 占位）。
+ * 大大的豆豆形象 + 等级 + 经验条 + 互动语 + 装扮商店入口。
+ *
+ * @param onNavigateToShop 点击"装扮商店"按钮时回调
  */
 @Composable
 fun PetScreen(
+    onNavigateToShop: () -> Unit,
     viewModel: PetViewModel = hiltViewModel(),
 ) {
     val petLevel by viewModel.petLevel.collectAsStateWithLifecycle()
@@ -63,8 +61,6 @@ fun PetScreen(
     val petEmoji = viewModel.petEmoji(petLevel)
     val expInLevel = petExp % PetViewModel.EXP_PER_LEVEL
     val expProgress = expInLevel.toFloat() / PetViewModel.EXP_PER_LEVEL
-
-    var showShopDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -165,9 +161,9 @@ fun PetScreen(
             )
         }
 
-        // 装扮商店入口（P1 占位）
+        // 装扮商店入口
         Button(
-            onClick = { showShopDialog = true },
+            onClick = onNavigateToShop,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
@@ -186,19 +182,5 @@ fun PetScreen(
                 color = Color.White,
             )
         }
-    }
-
-    // 装扮商店敬请期待弹窗
-    if (showShopDialog) {
-        AlertDialog(
-            onDismissRequest = { showShopDialog = false },
-            title = { Text("装扮商店") },
-            text = { Text("敬请期待！更多可爱装扮即将上线~ ✨") },
-            confirmButton = {
-                TextButton(onClick = { showShopDialog = false }) {
-                    Text("好的", color = Primary)
-                }
-            },
-        )
     }
 }

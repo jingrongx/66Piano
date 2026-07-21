@@ -20,6 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,6 +58,7 @@ import com.pianokids.ui.components.PianoKeyboard
 import com.pianokids.ui.theme.Correct
 import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
+import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.Warning
 import com.pianokids.ui.theme.Wrong
 
@@ -61,12 +66,18 @@ import com.pianokids.ui.theme.Wrong
  * 练琴界面。
  *
  * 曲目选择 → 练琴模式（简化五线谱 + 实时高亮反馈）→ 得分。
+ *
+ * 顶部三个按钮：「我的乐谱库」「自定义创建」「拍照识谱」。
  */
 @Composable
 fun PracticeScreen(
+    onOpenLibrary: () -> Unit = {},
+    onCreateNew: () -> Unit = {},
+    onScan: () -> Unit = {},
     viewModel: PracticeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val customSongs by viewModel.customSongs.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -85,8 +96,12 @@ fun PracticeScreen(
         ) {
             if (uiState.selectedSong == null) {
                 SongListScreen(
-                    songs = viewModel.songs,
+                    builtinSongs = viewModel.builtinSongs,
+                    customSongs = customSongs,
                     onSelect = viewModel::selectSong,
+                    onOpenLibrary = onOpenLibrary,
+                    onCreateNew = onCreateNew,
+                    onScan = onScan,
                 )
             } else if (uiState.finished) {
                 ScoreScreen(
@@ -109,8 +124,12 @@ fun PracticeScreen(
 
 @Composable
 private fun SongListScreen(
-    songs: List<SongItem>,
+    builtinSongs: List<SongItem>,
+    customSongs: List<SongItem>,
     onSelect: (SongItem) -> Unit,
+    onOpenLibrary: () -> Unit,
+    onCreateNew: () -> Unit,
+    onScan: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -125,56 +144,171 @@ private fun SongListScreen(
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
         )
-        songs.forEach { song ->
+
+        // 顶部入口：乐谱库 / 自定义创建 / 拍照识谱
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            EntryCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.LibraryMusic,
+                label = "我的乐谱",
+                color = Secondary,
+                onClick = onOpenLibrary,
+            )
+            EntryCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.Edit,
+                label = "自定义",
+                color = Primary,
+                onClick = onCreateNew,
+            )
+            EntryCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.CameraAlt,
+                label = "拍照识谱",
+                color = Tertiary,
+                onClick = onScan,
+            )
+        }
+
+        // 内置曲目
+        SectionHeader("🎵 内置曲目")
+        builtinSongs.forEach { song ->
+            SongCard(song = song, accentColor = Primary, onSelect = onSelect)
+        }
+
+        // 自定义曲目
+        if (customSongs.isNotEmpty()) {
+            SectionHeader("✏️ 我的乐谱")
+            customSongs.forEach { song ->
+                SongCard(song = song, accentColor = Tertiary, onSelect = onSelect)
+            }
+        } else {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSelect(song) },
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Primary),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ),
             ) {
-                Row(
+                Text(
+                    text = "还没有自定义乐谱\n点击上方「自定义」创建，或用「拍照识谱」识别",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.25f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MusicNote,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp),
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = song.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = song.subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.9f),
-                        )
-                    }
-                    Text(
-                        text = "▶",
-                        color = Color.White,
-                        fontSize = 28.sp,
-                    )
-                }
+                        .padding(16.dp),
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+@Composable
+private fun EntryCard(
+    modifier: Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    color: Color,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = color),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = label,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SongCard(
+    song: SongItem,
+    accentColor: Color,
+    onSelect: (SongItem) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(song) },
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = accentColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = song.subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.9f),
+                )
+            }
+            Text(
+                text = "▶",
+                color = Color.White,
+                fontSize = 28.sp,
+            )
         }
     }
 }

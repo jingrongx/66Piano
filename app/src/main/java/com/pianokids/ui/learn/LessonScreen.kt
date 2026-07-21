@@ -82,11 +82,18 @@ fun LessonScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // 加载课程内容
+    LaunchedEffect(lessonId) {
+        viewModel.loadLesson(lessonId)
+    }
+
     LaunchedEffect(Unit) {
         viewModel.snackbar.collect { msg ->
             snackbarHostState.showSnackbar(msg)
         }
     }
+
+    val content = uiState.content
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -111,7 +118,7 @@ fun LessonScreen(
                     )
                 }
                 Text(
-                    text = "第 1 课：认识钢琴",
+                    text = "${content.icon} 第 ${content.level} 课：${content.title}",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold,
@@ -124,8 +131,14 @@ fun LessonScreen(
             // 步骤内容
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (uiState.step) {
-                    0 -> StepWatchAnimation(onNext = viewModel::nextStep)
+                    0 -> StepWatchAnimation(
+                        introText = content.introText,
+                        icon = content.icon,
+                        onNext = viewModel::nextStep,
+                    )
                     1 -> StepWatchDemo(
+                        demoName = content.demoName,
+                        demoDesc = content.demoDesc,
                         demoPlayed = uiState.demoPlayed,
                         highlightedNotes = uiState.highlightedNotes,
                         noteColors = uiState.noteColors,
@@ -133,15 +146,23 @@ fun LessonScreen(
                         onNext = viewModel::nextStep,
                     )
                     2 -> StepFollowMe(
+                        targetName = content.demoName,
                         highlightedNotes = uiState.highlightedNotes,
                         noteColors = uiState.noteColors,
                     )
                     3 -> StepSolo(
+                        soloHint = content.soloHint,
+                        soloTargets = content.soloTargets,
                         soloProgress = uiState.soloProgress,
                         highlightedNotes = uiState.highlightedNotes,
                         noteColors = uiState.noteColors,
                     )
-                    4 -> StepReward(onBack = onBack)
+                    4 -> StepReward(
+                        title = content.title,
+                        rewardStars = content.rewardStars,
+                        rewardExp = content.rewardExp,
+                        onBack = onBack,
+                    )
                 }
             }
         }
@@ -214,7 +235,11 @@ private fun StepProgressBar(currentStep: Int, totalSteps: Int) {
 // ============== 步骤 1：看动画 ==============
 
 @Composable
-private fun StepWatchAnimation(onNext: () -> Unit) {
+private fun StepWatchAnimation(
+    introText: String,
+    icon: String,
+    onNext: () -> Unit,
+) {
     // 键盘脉冲动画
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -242,14 +267,14 @@ private fun StepWatchAnimation(onNext: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "🎹 钢琴小知识",
+                    text = "$icon 钢琴小知识",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "钢琴一共有 88 个键\n52 个白键，36 个黑键\n最中间的 C 叫做「中央 C」",
+                    text = introText,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
@@ -287,6 +312,8 @@ private fun StepWatchAnimation(onNext: () -> Unit) {
 
 @Composable
 private fun StepWatchDemo(
+    demoName: String,
+    demoDesc: String,
     demoPlayed: Boolean,
     highlightedNotes: Set<Int>,
     noteColors: Map<Int, Color>,
@@ -299,7 +326,7 @@ private fun StepWatchDemo(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "高亮的键就是中央 C\n点击下方按钮听听它的声音",
+            text = demoDesc,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
@@ -308,7 +335,7 @@ private fun StepWatchDemo(
 
         PianoKeyboard(
             modifier = Modifier.fillMaxWidth(),
-            startMidi = 60,
+            startMidi = 48,
             endMidi = 84,
             highlightedNotes = highlightedNotes,
             noteColors = noteColors,
@@ -334,7 +361,7 @@ private fun StepWatchDemo(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    if (demoPlayed) "再听一次" else "播放示范音",
+                    if (demoPlayed) "再听一次 $demoName" else "播放示范音 $demoName",
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                 )
@@ -358,6 +385,7 @@ private fun StepWatchDemo(
 
 @Composable
 private fun StepFollowMe(
+    targetName: String,
     highlightedNotes: Set<Int>,
     noteColors: Map<Int, Color>,
 ) {
@@ -367,7 +395,7 @@ private fun StepFollowMe(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "请弹奏中央 C（C4）",
+            text = "请弹奏 $targetName",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
@@ -380,7 +408,7 @@ private fun StepFollowMe(
 
         PianoKeyboard(
             modifier = Modifier.fillMaxWidth(),
-            startMidi = 60,
+            startMidi = 48,
             endMidi = 84,
             highlightedNotes = highlightedNotes,
             noteColors = noteColors,
@@ -393,31 +421,32 @@ private fun StepFollowMe(
 
 @Composable
 private fun StepSolo(
+    soloHint: String,
+    soloTargets: List<Int>,
     soloProgress: Int,
     highlightedNotes: Set<Int>,
     noteColors: Map<Int, Color>,
 ) {
-    val targets = listOf("C4" to 60, "D4" to 62, "E4" to 64)
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "依次弹奏 C、D、E",
+            text = soloHint,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
         )
 
         // 目标音符进度
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            targets.forEachIndexed { index, (name, _) ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            soloTargets.forEachIndexed { index, midi ->
                 val done = index < soloProgress
                 val current = index == soloProgress
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(
                             when {
@@ -429,8 +458,9 @@ private fun StepSolo(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = name,
+                        text = midiToName(midi),
                         fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
                         color = if (done || current) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -439,7 +469,7 @@ private fun StepSolo(
 
         PianoKeyboard(
             modifier = Modifier.fillMaxWidth(),
-            startMidi = 60,
+            startMidi = 48,
             endMidi = 84,
             highlightedNotes = highlightedNotes,
             noteColors = noteColors,
@@ -451,7 +481,12 @@ private fun StepSolo(
 // ============== 步骤 5：领奖励 ==============
 
 @Composable
-private fun StepReward(onBack: () -> Unit) {
+private fun StepReward(
+    title: String,
+    rewardStars: Int,
+    rewardExp: Int,
+    onBack: () -> Unit,
+) {
     // 星星弹跳动画
     val starScale by animateFloatAsState(
         targetValue = 1f,
@@ -467,9 +502,8 @@ private fun StepReward(onBack: () -> Unit) {
         verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // 三颗星
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            repeat(3) {
+            repeat(rewardStars) {
                 Icon(
                     imageVector = Icons.Filled.Star,
                     contentDescription = "星",
@@ -487,13 +521,13 @@ private fun StepReward(onBack: () -> Unit) {
         )
 
         Text(
-            text = "恭喜完成第 1 课！",
+            text = "恭喜完成 $title！",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "获得 3 颗星 + 30 经验",
+            text = "获得 $rewardStars 颗星 + $rewardExp 经验",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -509,4 +543,10 @@ private fun StepReward(onBack: () -> Unit) {
             Text("返回学习", style = MaterialTheme.typography.titleMedium, color = Color.White)
         }
     }
+}
+
+private val NOTE_NAMES_ARR = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+private fun midiToName(midi: Int): String {
+    val octave = midi / 12 - 1
+    return NOTE_NAMES_ARR[midi % 12] + octave
 }

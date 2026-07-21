@@ -31,6 +31,38 @@ data class ProgressEntity(
 )
 
 /**
+ * 自定义/导入乐谱实体。
+ *
+ * 三种来源共用同一张表：CUSTOM（手动编辑）/ SCAN（拍照识谱）/ MIDI（导入 MIDI）。
+ *
+ * @property id 主键（自动生成）
+ * @property title 乐谱标题
+ * @property source 来源（CUSTOM / SCAN / MIDI）
+ * @property tempo BPM
+ * @property timeSigNumerator 拍号分子
+ * @property timeSigDenominator 拍号分母
+ * @property notesJson 序列化的音符列表（JSON）
+ * @property durationMs 整曲时长（毫秒）
+ * @property coverColor 封面色（用于列表展示）
+ * @property createdAt 创建时间戳
+ * @property updatedAt 更新时间戳
+ */
+@Entity(tableName = "pieces")
+data class PieceEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val title: String,
+    val source: String,
+    val tempo: Int,
+    val timeSigNumerator: Int,
+    val timeSigDenominator: Int,
+    val notesJson: String,
+    val durationMs: Long,
+    val coverColor: Int,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+/**
  * 成就实体。
  *
  * @property id 成就唯一标识
@@ -133,6 +165,30 @@ interface PracticeDao {
     suspend fun getAverageAccuracy(): Float
 }
 
+/**
+ * 自定义/导入乐谱数据访问。
+ */
+@Dao
+interface PieceDao {
+    @Insert
+    suspend fun insert(entity: PieceEntity): Long
+
+    @Update
+    suspend fun update(entity: PieceEntity)
+
+    @Query("DELETE FROM pieces WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM pieces WHERE id = :id")
+    suspend fun get(id: Long): PieceEntity?
+
+    @Query("SELECT * FROM pieces ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<PieceEntity>>
+
+    @Query("SELECT COUNT(*) FROM pieces")
+    suspend fun count(): Int
+}
+
 // ============== Database ==============
 
 /**
@@ -145,14 +201,16 @@ interface PracticeDao {
         ProgressEntity::class,
         AchievementEntity::class,
         PracticeSessionEntity::class,
+        PieceEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class PianoDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun achievementDao(): AchievementDao
     abstract fun practiceDao(): PracticeDao
+    abstract fun pieceDao(): PieceDao
 
     companion object {
         const val DB_NAME = "pianokids.db"
