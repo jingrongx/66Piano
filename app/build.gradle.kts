@@ -31,13 +31,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("KEY_ALIAS") ?: ""
+            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // 临时使用 debug 签名，保证 release APK 可直接安装
-            // 正式发布时替换为正式 keystore（通过 signingConfigs.create + 环境变量读取）
-            signingConfig = signingConfigs.getByName("debug")
+            // CI 中存在 KEYSTORE_PASSWORD 环境变量时用正式签名，本地开发 fallback 到 debug 签名
+            val hasReleaseSigning = !System.getenv("KEYSTORE_PASSWORD").isNullOrEmpty()
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
     compileOptions {
