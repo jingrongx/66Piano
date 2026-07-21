@@ -1,9 +1,13 @@
 name: Release
 
 # 触发条件：
-# 1. push 到 main 分支 → 自动递增版本号 + 打 tag + 发版
+# 1. push 到 main 分支（非 chore(release) 提交）→ 自动递增版本号 + 打 tag + 发版
 # 2. 推送 v* 形式的 tag → 自动发版（手动控制版本）
 # 3. 在 Actions 页面手动触发（输入版本号）
+#
+# 防递归：
+# - chore(release) 提交携带 [skip ci] 标记
+# - job if 条件跳过 chore(release) 触发的 push
 on:
   push:
     branches:
@@ -24,21 +28,22 @@ jobs:
   release:
     name: Build & Release APK
     runs-on: ubuntu-latest
+    # 防递归：跳过 chore(release) 提交触发的 push
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, 'chore(release)')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 自动版本递增需要完整 git 历史
+          fetch-depth: 0  # 自动版本递增需要完整 git 历史 + 所有 tag
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
 
       - name: Compute version
         id: ver
         run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ -z "${{ github.event.ref }}" ]; then
-            # 兜底：不应进入此分支
-            VERSION="0.0.1"
-            TAG="v$VERSION"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             # 推 tag 触发
             TAG="${GITHUB_REF#refs/tags/}"
             VERSION="${TAG#v}"
@@ -48,9 +53,13 @@ jobs:
             TAG="v$VERSION"
           else
             # push 到 main 分支：自动递增版本号
-            # 取最新 tag 作为基准
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            BASE_VERSION="${LATEST_TAG#v}"
+            # 取远程最新 tag 作为基准（按版本号排序，而非按提交时间）
+            LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1 || echo "")
+            if [ -z "$LATEST_TAG" ]; then
+              BASE_VERSION="0.0.0"
+            else
+              BASE_VERSION="${LATEST_TAG#v}"
+            fi
             MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
             MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
             PATCH=$(echo "$BASE_VERSION" | cut -d. -f3)
@@ -58,6 +67,13 @@ jobs:
             PATCH=$((PATCH + 1))
             VERSION="${MAJOR}.${MINOR}.${PATCH}"
             TAG="v$VERSION"
+            # 检查 tag 是否已存在（避免并发触发重复发版）
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "::notice::Tag $TAG 已存在，可能是并发触发，跳过本次发版"
+              echo "version=" >> $GITHUB_OUTPUT
+              echo "tag=" >> $GITHUB_OUTPUT
+              exit 0
+            fi
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -69,28 +85,31 @@ jobs:
           echo "Computed version: $VERSION (tag: $TAG)"
 
       - name: Setup JDK 17
+        if: steps.ver.outputs.version != ''
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Accept Android SDK Licenses
+        if: steps.ver.outputs.version != ''
         run: (echo "y"; echo "y"; echo "y"; echo "y"; echo "y"; echo "y"; echo "y"; echo "y") | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
       - name: Setup Gradle
+        if: steps.ver.outputs.version != ''
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
 
       - name: Generate Gradle Wrapper (if missing)
+        if: steps.ver.outputs.version != ''
         run: gradle wrapper --gradle-version 8.7 --distribution-type bin
 
       - name: Bump versionCode & versionName
+        if: steps.ver.outputs.version != ''
         run: |
-          # 把 versionCode 改为：major*10000 + minor*100 + patch
-          # 把 versionName 改为 tag 对应的 x.y.z
           VERSION="${{ steps.ver.outputs.version }}"
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
@@ -102,15 +121,16 @@ jobs:
           grep -E 'versionCode|versionName' app/build.gradle.kts
 
       - name: Build Release APK
+        if: steps.ver.outputs.version != ''
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK to PianoKids-v<version>.apk
+        if: steps.ver.outputs.version != ''
         id: apk
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           SRC="app/build/outputs/apk/release/app-release-unsigned.apk"
           if [ ! -f "$SRC" ]; then
-            # 某些 AGP 版本输出 app-release.apk
             SRC="app/build/outputs/apk/release/app-release.apk"
           fi
           DST="PianoKids-v${VERSION}.apk"
@@ -119,8 +139,8 @@ jobs:
           ls -lh "$DST"
 
       - name: Generate changelog (release notes)
+        if: steps.ver.outputs.version != ''
         run: |
-          # 用最近 30 条提交生成更新内容
           {
             echo "## PianoKids v${{ steps.ver.outputs.version }}"
             echo ""
@@ -132,18 +152,14 @@ jobs:
           cat CHANGELOG.md
 
       - name: Generate latest.json (in-app update manifest)
+        if: steps.ver.outputs.version != ''
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           TAG="${{ steps.ver.outputs.tag }}"
-          # 直链（GitHub 官方）
           APK_URL_DIRECT="https://github.com/jingrongx/66Piano/releases/download/${TAG}/PianoKids-v${VERSION}.apk"
-          # ghproxy 加速地址：用户在国内时由 App 自动拼接
           APK_URL_PROXY="https://ghproxy.net/${APK_URL_DIRECT}"
-          # latest.json 同样通过 ghproxy 加速
           LATEST_JSON_PROXY="https://ghproxy.net/https://github.com/jingrongx/66Piano/releases/latest/download/latest.json"
-          # 读取 versionCode
           CODE=$(grep -E '^\s*versionCode' app/build.gradle.kts | head -1 | grep -oE '[0-9]+')
-          # 生成 JSON
           cat > latest.json <<EOF
           {
             "version": "${VERSION}",
@@ -159,6 +175,7 @@ jobs:
           cat latest.json
 
       - name: Create GitHub Release
+        if: steps.ver.outputs.version != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
@@ -169,22 +186,29 @@ jobs:
           files: |
             ${{ steps.apk.outputs.path }}
             latest.json
-          generate_release_notes: true  # GitHub 自动生成 release notes（与 CHANGELOG.md 合并）
+          generate_release_notes: true
 
       - name: Push version bump commit & tag back to repo
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.ver.outputs.version != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add app/build.gradle.kts
-          git commit -m "chore(release): bump version to ${{ steps.ver.outputs.version }}" || echo "nothing to commit"
+          # 用 [skip ci] 标记，避免 push 触发 release workflow 递归
+          git commit -m "chore(release): bump version to ${{ steps.ver.outputs.version }} [skip ci]" || echo "nothing to commit"
           git push origin HEAD:main
-          git tag ${{ steps.ver.outputs.tag }}
-          git push origin ${{ steps.ver.outputs.tag }}
+          # tag 已存在则跳过，不报错（防并发触发）
+          if git rev-parse "${{ steps.ver.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.ver.outputs.tag }} already exists locally, skipping"
+          else
+            git tag ${{ steps.ver.outputs.tag }}
+            # 远程已存在则跳过，不报错
+            git push origin ${{ steps.ver.outputs.tag }} || echo "Remote tag push rejected (likely exists)"
+          fi
 
       - name: Upload APK artifact
+        if: always() && steps.ver.outputs.version != ''
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: pianokids-release-apk-v${{ steps.ver.outputs.version }}
           path: ${{ steps.apk.outputs.path }}
