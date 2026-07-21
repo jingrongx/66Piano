@@ -1,14 +1,17 @@
 package com.pianokids.data.backup
 
+import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import com.pianokids.data.db.PianoDatabase
 import com.pianokids.data.prefs.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -69,11 +72,13 @@ class LocalBackupManager @Inject constructor(
 
     /**
      * 从外部备份恢复数据。返回 true 表示恢复成功且需要重启应用才能生效。
+     *
+     * 优先从公共 Documents 目录读取（卸载后仍存在），
+     * 回退到 app-specific 缓存。
      */
     suspend fun restore(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val file = latestBackupFile() ?: return@runCatching false
-            val json = file.readText()
+            val json = readLatestBackup() ?: return@runCatching false
             applyBackup(json)
         }.getOrDefault(false)
     }
@@ -81,7 +86,9 @@ class LocalBackupManager @Inject constructor(
     /**
      * 是否存在可恢复的备份。
      */
-    fun hasBackup(): Boolean = latestBackupFile()?.exists() == true
+    fun hasBackup(): Boolean = runCatching {
+        readLatestBackup() != null
+    }.getOrDefault(false)
 
     /**
      * 最近一次备份时间戳（毫秒），无备份返回 0。
@@ -93,19 +100,19 @@ class LocalBackupManager @Inject constructor(
     private suspend fun doBackup() = mutex.withLock {
         val snapshot = collectSnapshot()
         val json = serialize(snapshot)
-        val dir = backupDir()
-        dir.mkdirs()
-        // 写入两个文件：latest.json（最新）+ timestamp.json（时间戳归档）
-        val latest = File(dir, "latest.json")
-        latest.writeText(json)
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val archive = File(dir, "backup_$ts.json")
-        archive.writeText(json)
-        // 仅保留最近 5 份归档
-        dir.listFiles { f -> f.name.startsWith("backup_") }
-            ?.sortedByDescending { it.lastModified() }
-            ?.drop(5)
-            ?.forEach { it.delete() }
+
+        // 1. 写入公共 Documents 目录（卸载后保留，核心目标）
+        //    - Android 10+：MediaStore API（不需要存储权限）
+        //    - Android 9 及以下：File API（需要 WRITE_EXTERNAL_STORAGE，已在 manifest 声明）
+        writeToPublicDocs("latest.json", json)
+        writeToPublicDocs("backup_$ts.json", json)
+        cleanupOldPublicArchives()
+
+        // 2. 同时写入 app-specific 外部目录作为快速恢复缓存
+        //    （卸载会清理，但配合 Auto Backup 可恢复；读写快，无需权限）
+        val cacheDir = File(context.getExternalFilesDir(null), "backup").apply { mkdirs() }
+        File(cacheDir, "latest.json").writeText(json)
     }
 
     private suspend fun collectSnapshot(): BackupSnapshot {
@@ -215,21 +222,156 @@ class LocalBackupManager @Inject constructor(
         return true
     }
 
-    private fun backupDir(): File {
-        // 优先用公共 Documents 目录（卸载后不清理）
-        val baseDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ 用 app-specific external dir（卸载会清理，但配合 Auto Backup 可恢复）
-            // 这里改用公共目录 Documents，需要 MANAGE_EXTERNAL_STORAGE 或 MediaStore
-            // 简化：用 app-specific external，配合 Auto Backup 兜底
-            File(context.getExternalFilesDir(null), "backup")
-        } else {
-            File(android.os.Environment.getExternalStorageDirectory(), "Documents/PianoKids/backup")
+    /**
+     * 写入公共 Documents/PianoKids/backup/ 目录。
+     * Android 10+ 用 MediaStore（无需权限），Android 9 及以下用 File API。
+     *
+     * @return 写入是否成功
+     */
+    private fun writeToPublicDocs(fileName: String, content: String): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+：MediaStore API
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOCUMENTS}/PianoKids/backup")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.MediaColumns.IS_PENDING, 1)
+                    }
+                }
+                val collection = MediaStore.Files.getContentUri("external")
+                // 先删除同名旧文件（避免创建副本）
+                resolver.delete(
+                    collection,
+                    "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                    arrayOf("${Environment.DIRECTORY_DOCUMENTS}/PianoKids/backup/", fileName),
+                )
+                val uri = resolver.insert(collection, values) ?: return false
+                resolver.openOutputStream(uri)?.use { out ->
+                    out.write(content.toByteArray())
+                } ?: return false
+                // 标记写入完成
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val doneValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    }
+                    resolver.update(uri, doneValues, null, null)
+                }
+                true
+            } else {
+                // Android 9 及以下：File API
+                @Suppress("DEPRECATION")
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "PianoKids/backup",
+                )
+                dir.mkdirs()
+                File(dir, fileName).writeText(content)
+                true
+            }
+        } catch (t: Throwable) {
+            // 写公共目录失败不致命，app-specific 缓存仍然有效
+            false
         }
-        return baseDir
+    }
+
+    /**
+     * 从公共 Documents/PianoKids/backup/ 读取文件内容。
+     * @return 文件内容，读取失败返回 null
+     */
+    private fun readFromPublicDocs(fileName: String): String? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+：MediaStore 查询
+                val collection = MediaStore.Files.getContentUri("external")
+                val projection = arrayOf(MediaStore.MediaColumns._ID)
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+                val selectionArgs = arrayOf(
+                    "${Environment.DIRECTORY_DOCUMENTS}/PianoKids/backup/",
+                    fileName,
+                )
+                context.contentResolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val id = cursor.getLong(0)
+                        val uri = Uri.withAppendedPath(collection, id.toString())
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            input.bufferedReader().readText()
+                        }
+                    } else null
+                }
+            } else {
+                // Android 9 及以下：File API
+                @Suppress("DEPRECATION")
+                val file = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "PianoKids/backup/$fileName",
+                )
+                if (file.exists()) file.readText() else null
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * 清理公共目录中超过 5 份的旧归档。
+     */
+    private fun cleanupOldPublicArchives() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val collection = MediaStore.Files.getContentUri("external")
+                val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME)
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+                val selectionArgs = arrayOf(
+                    "${Environment.DIRECTORY_DOCUMENTS}/PianoKids/backup/",
+                    "backup_%",
+                )
+                val archives = mutableListOf<Pair<Long, String>>()
+                context.contentResolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        archives.add(cursor.getLong(0) to cursor.getString(1))
+                    }
+                }
+                // 按文件名排序（文件名含时间戳，字典序 = 时间序）
+                val sorted = archives.sortedByDescending { it.second }
+                sorted.drop(5).forEach { (id, _) ->
+                    val uri = Uri.withAppendedPath(collection, id.toString())
+                    context.contentResolver.delete(uri, null, null)
+                }
+            } catch (_: Throwable) { /* 清理失败不影响备份 */ }
+        } else {
+            try {
+                @Suppress("DEPRECATION")
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "PianoKids/backup",
+                )
+                dir.listFiles { f -> f.name.startsWith("backup_") }
+                    ?.sortedByDescending { it.name }
+                    ?.drop(5)
+                    ?.forEach { it.delete() }
+            } catch (_: Throwable) { }
+        }
+    }
+
+    /**
+     * 读取最新备份内容：优先公共目录（卸载保留），回退 app-specific 缓存。
+     */
+    private fun readLatestBackup(): String? {
+        // 1. 公共 Documents（卸载后仍存在）
+        readFromPublicDocs("latest.json")?.let { return it }
+        // 2. app-specific 缓存（卸载会清理，但重装前可用）
+        try {
+            val file = File(context.getExternalFilesDir(null), "backup/latest.json")
+            if (file.exists()) return file.readText()
+        } catch (_: Throwable) { }
+        return null
     }
 
     private fun latestBackupFile(): File? {
-        val dir = backupDir()
+        val dir = File(context.getExternalFilesDir(null), "backup")
         val latest = File(dir, "latest.json")
         return if (latest.exists()) latest else null
     }
