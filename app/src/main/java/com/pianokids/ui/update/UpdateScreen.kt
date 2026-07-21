@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pianokids.update.UpdateUiState
+import com.pianokids.update.UpdateViewModel
 import com.pianokids.ui.theme.Correct
 import com.pianokids.ui.theme.PinkSoft
 import com.pianokids.ui.theme.Primary
@@ -291,7 +293,7 @@ private fun CheckingCard() {
 }
 
 @Composable
-private fun LatestVersionCard(state: com.pianokids.update.UpdateUiState) {
+private fun LatestVersionCard(state: UpdateUiState) {
     val info = state.latest
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -398,7 +400,7 @@ private fun DownloadCard(progress: Int) {
 
 @Composable
 private fun ActionButtons(
-    state: com.pianokids.update.UpdateUiState,
+    state: UpdateUiState,
     onCheck: () -> Unit,
     onDownload: () -> Unit,
 ) {
