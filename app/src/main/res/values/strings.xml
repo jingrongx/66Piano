@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">钢琴学院</string>
+    <string name="app_subtitle">和豆豆一起学钢琴</string>
+
+    <!-- 底部导航 -->
+    <string name="tab_home">首页</string>
+    <string name="tab_learn">学习</string>
+    <string name="tab_tuner">调音</string>
+    <string name="tab_practice">练琴</string>
+    <string name="tab_pet">豆豆</string>
+
+    <!-- 首页 -->
+    <string name="home_greeting">嗨，欢迎回来！</string>
+    <string name="home_today_task">今日任务</string>
+    <string name="home_stars">我的星星</string>
+    <string name="home_streak">连续打卡</string>
+
+    <!-- 调音器 -->
+    <string name="tuner_title">调音器</string>
+    <string name="tuner_hint">弹一个音，看看准不准</string>
+    <string name="tuner_pitch_perfect">完美！</string>
+    <string name="tuner_pitch_close">再调一点点</string>
+    <string name="tuner_pitch_off">差得有点多哦</string>
+
+    <!-- 教学 -->
+    <string name="learn_continue">继续学习</string>
+    <string name="learn_step_watch">看动画</string>
+    <string name="learn_step_demo">看示范</string>
+    <string name="learn_step_follow">跟我弹</string>
+    <string name="learn_step_solo">自己弹</string>
+    <string name="learn_step_reward">领奖励</string>
+
+    <!-- 权限 -->
+    <string name="perm_mic_title">需要麦克风权限</string>
+    <string name="perm_mic_reason">钢琴学院需要听你弹琴，才能告诉你弹得对不对哦~</string>
+    <string name="perm_grant">去授权</string>
+
+    <!-- 服务 -->
+    <string name="service_listening_title">正在听你弹琴</string>
+    <string name="service_listening_text">豆豆在认真听哦~</string>
+
+    <!-- 宠物 -->
+    <string name="pet_hello">豆豆在等你练习呢！</string>
+    <string name="pet_level">等级</string>
+    <string name="pet_exp">经验</string>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌主色：温暖的钢琴木色 + 阳光橙 -->
+    <color name="brand_primary">#FF8A65</color>
+    <color name="brand_primary_dark">#E65100</color>
+    <color name="brand_secondary">#FFD54F</color>
+    <color name="brand_accent">#7E57C2</color>
+
+    <!-- 反馈色 -->
+    <color name="feedback_correct">#66BB6A</color>
+    <color name="feedback_warning">#FFB74D</color>
+    <color name="feedback_wrong">#EF5350</color>
+
+    <!-- 背景 -->
+    <color name="bg_light">#FFFBF5</color>
+    <color name="bg_dark">#1F1B16</color>
+
+    <!-- 钢琴键 -->
+    <color name="piano_white_key">#FAFAFA</color>
+    <color name="piano_black_key">#212121</color>
+</resources>

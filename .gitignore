@@ -1,0 +1,45 @@
+# Gradle
+.gradle/
+build/
+*/build/
+**/build/
+
+# CMake / NDK 中间产物
+.cxx/
+app/.cxx/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+local.properties
+
+# Eclipse / Other IDE
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# APK / 打包产物（开发时本地生成）
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Native 库中间产物
+*.so.tmp
+
+# 密钥
+*.jks
+*.keystore
+keystore.properties
+
+# 敏感本地配置
+gradle.local.properties
