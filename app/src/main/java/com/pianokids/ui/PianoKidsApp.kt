@@ -47,6 +47,7 @@ import com.pianokids.ui.pet.PetScreen
 import com.pianokids.ui.practice.PracticeScreen
 import com.pianokids.ui.scan.ScanScreen
 import com.pianokids.ui.tuner.TunerScreen
+import com.pianokids.ui.update.UpdateScreen
 
 // ============== 路由 ==============
 
@@ -63,6 +64,7 @@ object Routes {
     const val COSMETIC_SHOP = "cosmetic_shop"
     const val PARENT = "parent"
     const val CHALLENGE = "challenge"
+    const val UPDATE = "update"
 
     fun lesson(lessonId: String) = "lesson/$lessonId"
     fun pieceEditor(pieceId: Long) = "piece_editor/$pieceId"
@@ -244,10 +246,18 @@ fun PianoKidsApp() {
             composable(Routes.PARENT) {
                 ParentScreen(
                     onBack = { navController.popBackStack() },
+                    onNavigateToUpdate = {
+                        navController.navigate(Routes.UPDATE)
+                    },
                 )
             }
             composable(Routes.CHALLENGE) {
                 ChallengeScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.UPDATE) {
+                UpdateScreen(
                     onBack = { navController.popBackStack() },
                 )
             }

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -79,10 +80,12 @@ import java.util.Locale
  * 进入流程：输入 PIN → 解锁 → 显示统计 + 设置。
  *
  * @param onBack 返回
+ * @param onNavigateToUpdate 跳转到应用更新页
  */
 @Composable
 fun ParentScreen(
     onBack: () -> Unit,
+    onNavigateToUpdate: () -> Unit,
     viewModel: ParentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -166,6 +169,21 @@ fun ParentScreen(
                 RecentSessionsCard(sessions = uiState.recentSessions)
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // 应用更新入口
+                OutlinedButton(
+                    onClick = onNavigateToUpdate,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SystemUpdate,
+                        contentDescription = null,
+                        tint = Primary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("检查应用更新")
+                }
 
                 OutlinedButton(
                     onClick = { showPinDialog = true },
