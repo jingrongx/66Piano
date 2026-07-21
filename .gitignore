@@ -44,3 +44,4 @@ keystore.properties
 
 # 敏感本地配置
 gradle.local.properties
+.secrets/

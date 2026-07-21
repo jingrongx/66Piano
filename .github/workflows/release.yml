@@ -120,8 +120,18 @@ jobs:
           echo "Bumped: versionName=$VERSION, versionCode=$CODE"
           grep -E 'versionCode|versionName' app/build.gradle.kts
 
+      - name: Decode Keystore
+        if: steps.ver.outputs.version != ''
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+          ls -lh app/release.keystore
+
       - name: Build Release APK
         if: steps.ver.outputs.version != ''
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK to PianoKids-v<version>.apk
