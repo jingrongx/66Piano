@@ -30,7 +30,8 @@ class MidiImporter @Inject constructor(
         val title = queryTitle(uri) ?: defaultTitle
         val sequence = context.contentResolver.openInputStream(uri)?.use { input ->
             val midiFile = midiParser.parse(input)
-            midiFile.toNoteSequence(title = title).copy(source = NoteSequence.Source.MIDI)
+            // toNoteSequence 内部已设置 source = MIDI
+            midiFile.toNoteSequence(title = title)
         } ?: throw IllegalStateException("无法打开文件")
         piecesRepository.save(
             id = null,

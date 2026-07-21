@@ -1,9 +1,7 @@
 package com.pianokids.scan
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,11 +12,11 @@ import org.robolectric.annotation.Config
 /**
  * [SheetMusicRecognizer] 单元测试。
  *
- * 使用 Robolectric 在 JVM 上模拟 Android Bitmap 像素操作，
- * 构造合成五线谱图像验证识别流程：
- * 1. 空白图：应返回空结果（无五线谱、无音符）
- * 2. 仅 5 条横线：应检测到 5 条五线谱
- * 3. 5 条横线 + 音符圆点：应检测到至少 1 个音符
+ * 使用 Robolectric 在 JVM 上模拟 Android Bitmap 像素操作。
+ *
+ * 注意：Robolectric 默认 LEGACY 图形模式下 Canvas.drawLine/drawCircle 是像素级 NO-OP，
+ * 不会真正写入像素到 Bitmap。因此本测试**直接使用 [Bitmap.setPixels]** 构造合成图像，
+ * 完全绕开 Canvas，确保像素操作可被 [Bitmap.getPixels] 正确读取。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -41,9 +39,14 @@ class SheetMusicRecognizerTest {
 
     @Test
     fun `detects 5 staff lines when present`() {
-        val bitmap = createWhiteBitmap(600, 200)
-        // 5 条等间距水平线，gap=10 像素
-        drawHorizontalLines(bitmap, listOf(50, 60, 70, 80, 90))
+        val w = 600
+        val h = 200
+        val pixels = IntArray(w * h) { Color.WHITE }
+        // 5 条等间距水平黑线，gap=10 像素
+        listOf(50, 60, 70, 80, 90).forEach { y -> drawHorizontalLine(pixels, w, h, y) }
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+
         val result = recognizer.recognize(bitmap, title = "staff")
         assertEquals(
             "应检测到 5 条五线谱，实际 ${result.staffLineYs.size}",
@@ -60,11 +63,16 @@ class SheetMusicRecognizerTest {
 
     @Test
     fun `detects at least one note when staff lines and a note are present`() {
-        val bitmap = createWhiteBitmap(600, 200)
-        // 5 条水平线
-        drawHorizontalLines(bitmap, listOf(50, 60, 70, 80, 90))
-        // 在 x=300, y=70（中间线上）画一个音符圆点（黑色实心圆）
-        drawNote(bitmap, 300, 70, radius = 5)
+        val w = 600
+        val h = 200
+        val pixels = IntArray(w * h) { Color.WHITE }
+        // 5 条水平黑线
+        listOf(50, 60, 70, 80, 90).forEach { y -> drawHorizontalLine(pixels, w, h, y) }
+        // 在 x=300, y=70（中间线上）画一个黑色实心圆（音符）
+        drawNote(pixels, w, h, cx = 300, cy = 70, radius = 5)
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+
         val result = recognizer.recognize(bitmap, title = "one_note")
         assertTrue(
             "应检测到五线谱（5 条），实际 ${result.staffLineYs.size}",
@@ -90,8 +98,13 @@ class SheetMusicRecognizerTest {
     @Test
     fun `recognize handles small bitmap without scaling`() {
         // 小于 600 宽的图像不应触发降采样
-        val bitmap = createWhiteBitmap(300, 100)
-        drawHorizontalLines(bitmap, listOf(20, 28, 36, 44, 52))
+        val w = 300
+        val h = 100
+        val pixels = IntArray(w * h) { Color.WHITE }
+        listOf(20, 28, 36, 44, 52).forEach { y -> drawHorizontalLine(pixels, w, h, y) }
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+
         val result = recognizer.recognize(bitmap, title = "small")
         assertEquals(5, result.staffLineYs.size)
     }
@@ -99,45 +112,51 @@ class SheetMusicRecognizerTest {
     @Test
     fun `recognize handles larger bitmap with downsampling`() {
         // 大于 600 宽的图像应触发降采样（不应崩溃）
-        val bitmap = createWhiteBitmap(1200, 400)
-        drawHorizontalLines(bitmap, listOf(100, 120, 140, 160, 180))
+        val w = 1200
+        val h = 400
+        val pixels = IntArray(w * h) { Color.WHITE }
+        // 间距 20，降采样到 600 宽后约间距 10
+        listOf(100, 120, 140, 160, 180).forEach { y -> drawHorizontalLine(pixels, w, h, y) }
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+
         val result = recognizer.recognize(bitmap, title = "large")
         // 降采样后线间距约为 10，仍应能识别 5 条线
         assertEquals(5, result.staffLineYs.size)
     }
 
-    // ============== 辅助 ==============
+    // ============== 像素辅助函数（避开 Canvas，直接操作像素） ==============
+
+    /**
+     * 在 [pixels] 数组中画一条横贯整张图的水平黑线。
+     */
+    private fun drawHorizontalLine(pixels: IntArray, w: Int, h: Int, y: Int) {
+        if (y < 0 || y >= h) return
+        for (x in 0 until w) {
+            pixels[y * w + x] = Color.BLACK
+        }
+    }
+
+    /**
+     * 在 [pixels] 数组中画一个黑色实心圆。
+     */
+    private fun drawNote(pixels: IntArray, w: Int, h: Int, cx: Int, cy: Int, radius: Int) {
+        val r2 = radius * radius
+        for (dy in -radius..radius) {
+            for (dx in -radius..radius) {
+                if (dx * dx + dy * dy > r2) continue
+                val x = cx + dx
+                val y = cy + dy
+                if (x in 0 until w && y in 0 until h) {
+                    pixels[y * w + x] = Color.BLACK
+                }
+            }
+        }
+    }
 
     private fun createWhiteBitmap(w: Int, h: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.WHITE)
         return bitmap
-    }
-
-    private fun drawHorizontalLines(bitmap: Bitmap, ys: List<Int>) {
-        val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            color = Color.BLACK
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-        }
-        for (y in ys) {
-            canvas.drawLine(
-                0f,
-                y.toFloat(),
-                bitmap.width.toFloat(),
-                y.toFloat(),
-                paint,
-            )
-        }
-    }
-
-    private fun drawNote(bitmap: Bitmap, cx: Int, cy: Int, radius: Int) {
-        val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.FILL
-        }
-        canvas.drawCircle(cx.toFloat(), cy.toFloat(), radius.toFloat(), paint)
     }
 }

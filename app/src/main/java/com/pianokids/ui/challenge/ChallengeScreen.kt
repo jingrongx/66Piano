@@ -61,7 +61,6 @@ import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.Wrong
 import com.pianokids.ui.theme.YellowLight
-import kotlinx.coroutines.flow.collect
 
 /**
  * 闯关大冒险页面。

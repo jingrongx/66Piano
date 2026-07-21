@@ -323,8 +323,7 @@ object LessonCatalog {
      * lesson_1 默认解锁。
      */
     fun unlockedLessonIds(completed: Set<String>): Set<String> {
-        val ids = all.keys.toMutableSet()
-        // 把每节课在路径中的下一节也加入
+        // 按 level 排序得到学习路径顺序
         val order = all.values.sortedBy { it.level }.map { it.id }
         val unlocked = mutableSetOf<String>()
         unlocked.add(order.first())

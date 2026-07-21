@@ -85,13 +85,18 @@ class LessonViewModel @Inject constructor(
     private var handlingCorrect = false
 
     init {
-        // 启动监听服务，为步骤 3、4 的音高检测做准备
-        if (audioCapture.hasPermission()) {
-            PianoListeningService.start(context)
-        }
-        // 收集音高检测结果
+        // 收集音高检测结果（init 中仅订阅流，不立即启动前台服务）
         viewModelScope.launch {
             pitchDetector.pitches.collect { result -> handlePitch(result) }
+        }
+    }
+
+    /**
+     * 进入需要音高检测的步骤（2 跟我弹、3 自己弹）时调用，启动监听服务。
+     */
+    private fun ensureListeningService() {
+        if (audioCapture.hasPermission()) {
+            PianoListeningService.start(context)
         }
     }
 
@@ -129,6 +134,10 @@ class LessonViewModel @Inject constructor(
                 demoPlayed = if (next == 1) false else _uiState.value.demoPlayed,
             )
             updateHighlightsForStep(next)
+            // 进入步骤 2（跟我弹）时启动监听服务，为音高检测做准备
+            if (next == 2) {
+                ensureListeningService()
+            }
             content.ttsLines.getOrNull(next)?.let { ttsHelper.speak(it) }
         }
     }

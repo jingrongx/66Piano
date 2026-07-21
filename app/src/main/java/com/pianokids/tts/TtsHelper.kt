@@ -3,9 +3,14 @@ package com.pianokids.tts
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import com.pianokids.data.prefs.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -23,10 +28,13 @@ import javax.inject.Singleton
  *
  * 注意：TTS 引擎初始化是异步的，[isReady] 为 true 后才会真正发声；
  * 初始化前的语句会被排队（[queued]），初始化完成后自动播放。
+ *
+ * 启用状态会从 [UserPreferences] 异步加载，APP 重启后保持上次的开关设置。
  */
 @Singleton
 class TtsHelper @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val userPreferences: UserPreferences,
 ) {
 
     private val _isReady = MutableStateFlow(false)
@@ -42,6 +50,20 @@ class TtsHelper @Inject constructor(
     private var engine: TextToSpeech? = null
 
     private val initializing = AtomicBoolean(false)
+
+    /** 应用级协程，用于初始化时加载持久化状态 */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // 启动时异步加载持久化的 TTS 开关状态，避免阻塞构造
+        appScope.launch {
+            try {
+                _isEnabled.value = userPreferences.ttsEnabled()
+            } catch (t: Throwable) {
+                Log.w(TAG, "加载 ttsEnabled 失败，使用默认值 true", t)
+            }
+        }
+    }
 
     /**
      * 惰性初始化 TTS 引擎。可重复调用，仅第一次会真正初始化。

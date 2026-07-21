@@ -33,7 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pianokids.data.db.PracticeSessionEntity
+import com.pianokids.ui.learn.LessonCatalog
 import com.pianokids.ui.theme.Correct
 import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
@@ -468,9 +469,11 @@ private fun RecentSessionsCard(sessions: List<PracticeSessionEntity>) {
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             } else {
-                sessions.forEach { s ->
+                sessions.forEachIndexed { idx, s ->
                     SessionRow(s)
-                    Divider()
+                    if (idx != sessions.lastIndex) {
+                        HorizontalDivider()
+                    }
                 }
             }
         }
@@ -481,6 +484,7 @@ private fun RecentSessionsCard(sessions: List<PracticeSessionEntity>) {
 private fun SessionRow(session: PracticeSessionEntity) {
     val date = SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date(session.timestamp))
     val accuracyPercent = (session.accuracy * 100).toInt()
+    val title = runCatching { LessonCatalog.get(session.lessonId).title }.getOrDefault(session.lessonId)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -488,7 +492,7 @@ private fun SessionRow(session: PracticeSessionEntity) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = session.lessonId,
+                text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,

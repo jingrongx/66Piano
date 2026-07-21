@@ -173,15 +173,25 @@ class UserPreferences @Inject constructor(
     }
 
     /**
-     * 花费 [cost] 颗星购买装扮，成功返回 true，星星不足返回 false。
-     * 调用方需保证 [id] 未拥有。
+     * 花费 [cost] 颗星购买装扮。
+     *
+     * 单次事务原子操作：扣星 + 写入已拥有。返回值：
+     * - true：购买成功
+     * - false：星星不足，或已经拥有该装扮
      */
     suspend fun purchaseCosmetic(id: String, cost: Int): Boolean {
-        val stars = totalStars()
-        if (stars < cost) return false
-        setTotalStars(stars - cost)
-        addOwnedCosmetic(id)
-        return true
+        var success = false
+        store.edit { prefs ->
+            val stars = prefs[keyTotalStars] ?: 0
+            val owned = prefs[keyOwnedCosmetics] ?: emptySet()
+            if (stars < cost || id in owned) {
+                return@edit
+            }
+            prefs[keyTotalStars] = stars - cost
+            prefs[keyOwnedCosmetics] = owned + id
+            success = true
+        }
+        return success
     }
 
     // ============== TTS ==============

@@ -161,8 +161,14 @@ class ChallengeViewModel @Inject constructor(
      */
     fun selectMode(mode: ChallengeMode) {
         if (mode == ChallengeMode.IDLE) return
-        // 视奏模式需要音频采集
-        if (mode == ChallengeMode.SIGHT_READING && audioCapture.hasPermission()) {
+        // 视奏模式需要麦克风权限：未授权则提示并不进入
+        if (mode == ChallengeMode.SIGHT_READING) {
+            if (!audioCapture.hasPermission()) {
+                viewModelScope.launch {
+                    _snackbar.emit("需要麦克风权限才能进行视奏挑战，请到系统设置授权")
+                }
+                return
+            }
             PianoListeningService.start(context)
         }
         _uiState.value = ChallengeUiState(
