@@ -68,8 +68,9 @@ class SheetMusicRecognizerTest {
         val pixels = IntArray(w * h) { white }
         // 5 条水平黑线
         listOf(50, 60, 70, 80, 90).forEach { y -> drawHorizontalLine(pixels, w, h, y) }
-        // 在 x=300, y=70（中间线上）画一个黑色实心圆（音符）
-        drawNote(pixels, w, h, cx = 300, cy = 70, radius = 5)
+        // 在 x=300, y=70（中间线 B4 上）画一个黑色实心圆（音符头）。
+        // radius=10 ≈ 1 倍 gap：保证 eraseStaffLines 擦除线条后仍有足够像素触发列检测。
+        drawNote(pixels, w, h, cx = 300, cy = 70, radius = 10)
 
         val result = recognizer.recognizeFromPixels(pixels, w, h, title = "one_note")
         assertTrue(

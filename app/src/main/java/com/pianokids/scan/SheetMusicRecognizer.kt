@@ -93,7 +93,9 @@ class SheetMusicRecognizer {
             gray[i] = (r * 299 + g * 587 + b * 114) / 1000
         }
         val threshold = otsuThreshold(gray)
-        val isBlack = BooleanArray(w * h) { gray[it] < threshold }
+        // 注意：用 <= 而非 <。对于双峰分布（黑=0/白=255）的退化场景，
+        // Otsu 会返回 threshold=0，此时 gray < 0 永远为 false 会丢失所有黑色像素。
+        val isBlack = BooleanArray(w * h) { gray[it] <= threshold }
 
         // 找五线谱
         val staffYs = findStaffLines(isBlack, w, h)
@@ -112,10 +114,11 @@ class SheetMusicRecognizer {
             )
         }
 
-        // 五条线（从下到上）
-        val line1 = staffYs[0]  // 最下 = E4
-        val line5 = staffYs[4]  // 最上 = F5
-        val gap = (line5 - line1) / 4f  // 线间距
+        // 五条线：staffYs 为升序（图像 y 从小到大，即音乐上从 F5 到 E4）。
+        // 图像坐标中 y 越大越靠下，对应音乐上越低音；故 line1(E4，最下线) = max(y)，line5(F5，最上线) = min(y)。
+        val line1 = staffYs.max()  // 最下 = E4（y 最大）
+        val line5 = staffYs.min()  // 最上 = F5（y 最小）
+        val gap = (line1 - line5) / 4f  // 线间距（正值）
 
         // 移除五线谱线（避免干扰音符检测）
         eraseStaffLines(isBlack, w, h, staffYs, gap)
