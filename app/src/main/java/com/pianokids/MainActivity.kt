@@ -1,6 +1,7 @@
 package com.pianokids
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -32,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +55,7 @@ import dagger.hilt.android.AndroidEntryPoint
 /**
  * 应用唯一 Activity。
  *
- * **权限策略**：启动时强制要求所有必须权限（麦克风、相机、Internet 已隐式授予）。
+ * **权限策略**：启动时强制要求所有必须权限（麦克风、相机）。
  * 用户必须全部授权才能进入主界面；拒绝则显示权限说明卡片并引导到系统设置。
  *
  * 必须权限：
@@ -65,13 +67,6 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    /** 必须运行时申请的权限列表。 */
-    private val requiredPermissions: Array<String> = buildList {
-        add(Manifest.permission.RECORD_AUDIO)
-        // 仅 Android 12 及以下需要申请 CAMERA（13+ 用 READ_MEDIA_IMAGES 但相机权限仍需申请）
-        add(Manifest.permission.CAMERA)
-    }.toTypedArray()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -79,7 +74,7 @@ class MainActivity : ComponentActivity() {
             PianoKidsTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     PermissionGate(
-                        requiredPermissions = requiredPermissions,
+                        requiredPermissions = RequiredPermissions,
                         content = { PianoKidsApp() },
                     )
                 }
@@ -87,136 +82,148 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * 权限门控 Composable：检查所有必须权限是否已授予，
-     * 未授予则展示说明卡片并触发申请；用户拒绝后展示"前往设置"按钮。
-     */
-    @Composable
-    private fun PermissionGate(
-        requiredPermissions: Array<String>,
-        content: @Composable () -> Unit,
-    ) {
-        val context = LocalContext.current
-        var allGranted by remember {
-            mutableStateOf(checkAllPermissions(context, requiredPermissions))
-        }
-        var showRationale by remember { mutableStateOf(false) }
+    companion object {
+        /** 必须运行时申请的权限列表。 */
+        private val RequiredPermissions: Array<String> = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            add(Manifest.permission.CAMERA)
+        }.toTypedArray()
+    }
+}
 
-        val launcher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestMultiplePermissions(),
-        ) { result ->
-            allGranted = result.values.all { it }
-            showRationale = !allGranted && requiredPermissions.any {
-                shouldShowRequestPermissionRationale(it)
-            }
-        }
+/**
+ * 权限门控 Composable：检查所有必须权限是否已授予，
+ * 未授予则展示说明卡片并触发申请；用户拒绝后展示"前往设置"按钮。
+ *
+ * 作为顶级函数定义在文件顶层（非 MainActivity 内部），
+ * 避免 kapt 处理 Activity 时无法解析 @Composable 注解。
+ */
+@Composable
+fun PermissionGate(
+    requiredPermissions: Array<String>,
+    content: @Composable () -> Unit,
+) {
+    val context = LocalContext.current
+    var allGranted by remember {
+        mutableStateOf(checkAllPermissions(context, requiredPermissions))
+    }
+    var showRationale by remember { mutableStateOf(false) }
 
-        LaunchedEffect(Unit) {
-            if (!allGranted) {
-                launcher.launch(requiredPermissions)
-            }
-        }
-
-        if (allGranted) {
-            content()
-        } else {
-            PermissionRequiredScreen(
-                showRationale = showRationale,
-                onRequestAgain = { launcher.launch(requiredPermissions) },
-                onOpenSettings = {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                },
-            )
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        allGranted = result.values.all { it }
+        showRationale = !allGranted && requiredPermissions.any {
+            // 在 Composable 中无法直接调用 shouldShowRequestPermissionRationale，
+            // 通过 ContextWrapper 取到 Activity
+            (context as? android.app.Activity)?.shouldShowRequestPermissionRationale(it) == true
         }
     }
 
-    private fun checkAllPermissions(
-        context: android.content.Context,
-        permissions: Array<String>,
-    ): Boolean = permissions.all {
-        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    LaunchedEffect(Unit) {
+        if (!allGranted) {
+            launcher.launch(requiredPermissions)
+        }
     }
 
-    @Composable
-    private fun PermissionRequiredScreen(
-        showRationale: Boolean,
-        onRequestAgain: () -> Unit,
-        onOpenSettings: () -> Unit,
+    if (allGranted) {
+        content()
+    } else {
+        PermissionRequiredScreen(
+            showRationale = showRationale,
+            onRequestAgain = { launcher.launch(requiredPermissions) },
+            onOpenSettings = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            },
+        )
+    }
+}
+
+private fun checkAllPermissions(
+    context: Context,
+    permissions: Array<String>,
+): Boolean = permissions.all {
+    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+}
+
+@Composable
+private fun PermissionRequiredScreen(
+    showRationale: Boolean,
+    onRequestAgain: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
+        Card(
             modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .padding(32.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {
-            Card(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(32.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    .padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Security,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    Text(
-                        text = "需要权限才能使用",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        text = if (showRationale) {
-                            "钢琴学院需要麦克风识别音准、相机拍照识谱。\n您上次拒绝了权限，请到系统设置手动授予后返回。"
-                        } else {
-                            "钢琴学院需要以下权限：\n• 麦克风：识别钢琴音准\n• 相机：拍照识谱/导入乐谱\n\n请点击下方按钮授予权限。"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (showRationale) {
-                        Button(
-                            onClick = onOpenSettings,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        ) {
-                            Icon(imageVector = Icons.Filled.Mic, contentDescription = null)
-                            Spacer(modifier = Modifier.height(0.dp))
-                            Text("  前往系统设置", color = Color.White)
-                        }
+                Icon(
+                    imageVector = Icons.Filled.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    text = "需要权限才能使用",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = if (showRationale) {
+                        "钢琴学院需要麦克风识别音准、相机拍照识谱。\n您上次拒绝了权限，请到系统设置手动授予后返回。"
                     } else {
-                        Button(
-                            onClick = onRequestAgain,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        ) {
-                            Text("授予权限", color = Color.White)
-                        }
+                        "钢琴学院需要以下权限：\n• 麦克风：识别钢琴音准\n• 相机：拍照识谱/导入乐谱\n\n请点击下方按钮授予权限。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (showRationale) {
+                    Button(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Icon(imageVector = Icons.Filled.Mic, contentDescription = null)
+                        Text("  前往系统设置", color = Color.White)
+                    }
+                } else {
+                    Button(
+                        onClick = onRequestAgain,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Text("授予权限", color = Color.White)
                     }
                 }
             }
