@@ -61,10 +61,30 @@ class SheetMusicRecognizer {
         val w = scaled.width
         val h = scaled.height
 
-        // 2. 灰度 + Otsu 二值化
-        val gray = IntArray(w * h)
+        // 2. 提取像素
         val pixels = IntArray(w * h)
         scaled.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        return recognizeFromPixels(pixels, w, h, title, start)
+    }
+
+    /**
+     * 从 ARGB 像素数组直接识别。核心算法，不依赖 Bitmap。
+     *
+     * 可测试入口：测试时可直接构造 [pixels] 数组调用此方法，
+     * 无需依赖 Robolectric 的 Bitmap 像素模拟。
+     */
+    internal fun recognizeFromPixels(
+        pixels: IntArray,
+        w: Int,
+        h: Int,
+        title: String = "拍照识别",
+        startMs: Long = System.currentTimeMillis(),
+    ): Result {
+        val start = startMs
+
+        // 灰度 + Otsu 二值化
+        val gray = IntArray(w * h)
         for (i in pixels.indices) {
             val c = pixels[i]
             val r = (c shr 16) and 0xFF
@@ -75,7 +95,7 @@ class SheetMusicRecognizer {
         val threshold = otsuThreshold(gray)
         val isBlack = BooleanArray(w * h) { gray[it] < threshold }
 
-        // 3. 找五线谱
+        // 找五线谱
         val staffYs = findStaffLines(isBlack, w, h)
         if (staffYs.size < 5) {
             // 没找到完整五线谱，返回空结果
@@ -97,13 +117,13 @@ class SheetMusicRecognizer {
         val line5 = staffYs[4]  // 最上 = F5
         val gap = (line5 - line1) / 4f  // 线间距
 
-        // 4. 移除五线谱线（避免干扰音符检测）
+        // 移除五线谱线（避免干扰音符检测）
         eraseStaffLines(isBlack, w, h, staffYs, gap)
 
-        // 5. 列方向扫描找音符
+        // 列方向扫描找音符
         val noteXs = findNoteColumns(isBlack, w, h, line1, line5, gap)
 
-        // 6. 每个音符位置反推 MIDI
+        // 每个音符位置反推 MIDI
         val tempo = 120
         val stepMs = (60_000.0 / tempo).toLong()  // 一个四分音符 500ms，按等间距
         val notes = mutableListOf<Note>()
