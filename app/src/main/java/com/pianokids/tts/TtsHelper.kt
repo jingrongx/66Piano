@@ -1,6 +1,9 @@
 package com.pianokids.tts
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import com.pianokids.data.prefs.UserPreferences
@@ -17,7 +20,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Android TextToSpeech 封装。
+ * 文本转语音（TTS）统一入口。
+ *
+ * **优先级**：
+ * 1. Android 系统 TextToSpeech（默认）
+ * 2. 检测不到 TTS 引擎或中文语音时，调用 [FallbackTtsProvider]
+ *    （留作扩展点，未来可接入 Sherpa-ONNX 等离线 AI 大模型）
  *
  * 单例，整个 APP 共用一个 TTS 引擎实例。
  * 用于课程教学、闯关、家长报告等场景的语音引导。
@@ -26,10 +34,9 @@ import javax.inject.Singleton
  * - [speak] 直接朗读，重复调用会取消上一次未完成的语句
  * - [stop] 取消当前朗读
  *
- * 注意：TTS 引擎初始化是异步的，[isReady] 为 true 后才会真正发声；
- * 初始化前的语句会被排队（[queued]），初始化完成后自动播放。
- *
  * 启用状态会从 [UserPreferences] 异步加载，APP 重启后保持上次的开关设置。
+ *
+ * 系统不可用时可通过 [installSystemTts] 跳转到应用商店/设置引导用户安装 TTS 引擎。
  */
 @Singleton
 class TtsHelper @Inject constructor(
@@ -43,11 +50,26 @@ class TtsHelper @Inject constructor(
     private val _isEnabled = MutableStateFlow(true)
     val isEnabled: StateFlow<Boolean> = _isEnabled
 
+    /** 系统 TTS 是否可用（用于 UI 提示）。 */
+    private val _isSystemTtsAvailable = MutableStateFlow(false)
+    val isSystemTtsAvailable: StateFlow<Boolean> = _isSystemTtsAvailable
+
     /** 启用前的语句缓冲 */
     private val queued = ArrayDeque<String>()
 
     @Volatile
     private var engine: TextToSpeech? = null
+
+    /**
+     * 离线 TTS 提供者。当系统 TTS 不可用时启用。
+     * 当前为 [FallbackTtsProvider]（静默），未来可替换为 Sherpa-ONNX 实现。
+     */
+    @Volatile
+    private var offlineProvider: TtsProvider = FallbackTtsProvider()
+
+    /** 当前正在使用的提供者："system" / "offline" / "none" */
+    private val _activeProvider = MutableStateFlow("none")
+    val activeProvider: StateFlow<String> = _activeProvider
 
     private val initializing = AtomicBoolean(false)
 
@@ -67,6 +89,10 @@ class TtsHelper @Inject constructor(
 
     /**
      * 惰性初始化 TTS 引擎。可重复调用，仅第一次会真正初始化。
+     *
+     * 策略：
+     * 1. 先尝试系统 TTS
+     * 2. 若系统 TTS 初始化失败 / 不支持中文 → 切换到离线 TTS（当前为静默 fallback）
      */
     fun ensureInitialized() {
         if (engine != null || !initializing.compareAndSet(false, true)) return
@@ -75,16 +101,43 @@ class TtsHelper @Inject constructor(
                 val r = engine?.setLanguage(Locale.SIMPLIFIED_CHINESE)
                 if (r == TextToSpeech.LANG_AVAILABLE || r == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
                     _isReady.value = true
+                    _isSystemTtsAvailable.value = true
+                    _activeProvider.value = "system"
                     // 播放排队的语句
-                    while (queued.isNotEmpty()) {
-                        val text = queued.removeFirst()
-                        speakNow(text)
-                    }
+                    flushQueue()
+                } else {
+                    Log.w(TAG, "系统 TTS 不支持中文（result=$r），切换到离线 TTS")
+                    switchToOfflineProvider()
                 }
             } else {
-                Log.w(TAG, "TTS 初始化失败: $status")
+                Log.w(TAG, "系统 TTS 初始化失败: $status，切换到离线 TTS")
+                switchToOfflineProvider()
             }
             initializing.set(false)
+        }
+    }
+
+    /**
+     * 切换到离线 TTS 提供者（当前为静默 fallback）。
+     *
+     * **扩展点**：未来接入 Sherpa-ONNX 等离线模型时，在此构造并初始化：
+     * ```kotlin
+     * offlineProvider = SherpaOnnxTtsProvider(context, modelPath)
+     * offlineProvider.initialize { _isReady.value = true }
+     * ```
+     */
+    private fun switchToOfflineProvider() {
+        _isSystemTtsAvailable.value = false
+        _activeProvider.value = "offline"
+        try {
+            offlineProvider.initialize {
+                _isReady.value = true
+                flushQueue()
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "离线 TTS 初始化失败", t)
+            _isReady.value = false
+            _activeProvider.value = "none"
         }
     }
 
@@ -110,10 +163,14 @@ class TtsHelper @Inject constructor(
             queued.addLast(text)
             return
         }
-        speakNow(text, flush)
+        when (_activeProvider.value) {
+            "system" -> speakWithSystemTts(text, flush)
+            "offline" -> offlineProvider.speak(text, flush)
+            else -> { /* 静默 */ }
+        }
     }
 
-    private fun speakNow(text: String, flush: Boolean = true) {
+    private fun speakWithSystemTts(text: String, flush: Boolean) {
         val eng = engine ?: return
         eng.speak(
             text,
@@ -123,11 +180,22 @@ class TtsHelper @Inject constructor(
         )
     }
 
+    private fun flushQueue() {
+        while (queued.isNotEmpty()) {
+            val text = queued.removeFirst()
+            when (_activeProvider.value) {
+                "system" -> speakWithSystemTts(text, flush = false)
+                "offline" -> offlineProvider.speak(text, flush = false)
+            }
+        }
+    }
+
     /**
      * 立即停止朗读。
      */
     fun stop() {
         engine?.stop()
+        if (_activeProvider.value == "offline") offlineProvider.stop()
     }
 
     /**
@@ -137,7 +205,39 @@ class TtsHelper @Inject constructor(
         engine?.stop()
         engine?.shutdown()
         engine = null
+        offlineProvider.shutdown()
         _isReady.value = false
+        _activeProvider.value = "none"
+    }
+
+    /**
+     * 检测系统 TTS 是否可用。
+     *
+     * 可用于在 UI 上提示用户：若不可用，建议安装第三方 TTS 引擎
+     * （如 Google TTS、讯飞输入法、搜狗输入法等）。
+     */
+    fun isSystemTtsReady(): Boolean = _isSystemTtsAvailable.value
+
+    /**
+     * 跳转到系统 TTS 设置页面（让用户安装/启用 TTS 引擎）。
+     */
+    fun openSystemTtsSettings() {
+        runCatching {
+            val intent = Intent().apply {
+                action = "com.android.settings.TTS_SETTINGS"
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            // 兜底：跳转到应用详情页
+            runCatching {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+        }
     }
 
     companion object {

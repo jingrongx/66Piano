@@ -1,9 +1,5 @@
 package com.pianokids.ui
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -20,13 +16,10 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -91,29 +84,12 @@ private val BOTTOM_TABS = listOf(
  * 钢琴学院顶级 Composable。
  *
  * 设置 Scaffold + 底部导航栏（5 个 Tab），使用 Navigation Compose。
- * 启动时申请麦克风权限。
+ *
+ * **权限**：由 [com.pianokids.MainActivity] 在启动时强制申请，这里不再重复申请。
  */
 @Composable
 fun PianoKidsApp() {
     val navController = rememberNavController()
-    val context = LocalContext.current
-
-    // 麦克风权限申请
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { _ ->
-        // 无论授权与否都不阻塞 UI；未授权时音频相关页面会优雅降级
-    }
-
-    LaunchedEffect(Unit) {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
