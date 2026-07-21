@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.VideogameAsset
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -49,15 +51,19 @@ import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.YellowLight
 
 /**
- * 首页：问候语 + 豆豆头像 + 今日任务 + 星星 + 打卡 + 最近练习。
+ * 首页：问候语 + 豆豆头像 + 今日任务 + 星星 + 打卡 + 最近练习 + 闯关入口 + 家长区入口。
  *
  * @param onNavigateLearn 点击"今日任务"或"开始学习"时回调
  * @param onNavigatePractice 点击最近练习曲目时回调
+ * @param onNavigateParent 点击家长区入口时回调
+ * @param onNavigateChallenge 点击闯关大冒险入口时回调
  */
 @Composable
 fun HomeScreen(
     onNavigateLearn: () -> Unit,
     onNavigatePractice: () -> Unit,
+    onNavigateParent: () -> Unit,
+    onNavigateChallenge: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val totalStars by viewModel.totalStars.collectAsStateWithLifecycle()
@@ -126,13 +132,15 @@ fun HomeScreen(
                     TodayTaskCard(onNavigateLearn)
                     StatsRow(totalStars, streakDays)
                 }
-                // 右列：最近练习
+                // 右列：最近练习 + 闯关入口 + 家长区入口
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     RecentPracticeCard(onNavigatePractice)
+                    ChallengeCard(onNavigateChallenge)
                     PetTipCard(petEmoji)
+                    ParentEntryCard(onNavigateParent)
                 }
             }
         } else {
@@ -140,7 +148,107 @@ fun HomeScreen(
             TodayTaskCard(onNavigateLearn)
             StatsRow(totalStars, streakDays)
             RecentPracticeCard(onNavigatePractice)
+            ChallengeCard(onNavigateChallenge)
             PetTipCard(petEmoji)
+            ParentEntryCard(onNavigateParent)
+        }
+    }
+}
+
+/**
+ * 闯关大冒险入口卡片。
+ */
+@Composable
+private fun ChallengeCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Correct),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "闯关大冒险",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "听音 · 节奏 · 视奏三重挑战",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.9f),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "挑战赢取星星 →",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.VideogameAsset,
+                    contentDescription = "闯关",
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 家长区入口卡片。
+ */
+@Composable
+private fun ParentEntryCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "家长区",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "→",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

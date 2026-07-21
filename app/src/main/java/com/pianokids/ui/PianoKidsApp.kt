@@ -35,11 +35,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.pianokids.ui.challenge.ChallengeScreen
 import com.pianokids.ui.home.HomeScreen
 import com.pianokids.ui.learn.LearnScreen
 import com.pianokids.ui.learn.LessonScreen
 import com.pianokids.ui.library.LibraryScreen
 import com.pianokids.ui.library.PieceEditorScreen
+import com.pianokids.ui.parent.ParentScreen
+import com.pianokids.ui.pet.CosmeticShopScreen
 import com.pianokids.ui.pet.PetScreen
 import com.pianokids.ui.practice.PracticeScreen
 import com.pianokids.ui.scan.ScanScreen
@@ -57,6 +60,9 @@ object Routes {
     const val LIBRARY = "library"
     const val PIECE_EDITOR = "piece_editor/{pieceId}"
     const val SCAN = "scan"
+    const val COSMETIC_SHOP = "cosmetic_shop"
+    const val PARENT = "parent"
+    const val CHALLENGE = "challenge"
 
     fun lesson(lessonId: String) = "lesson/$lessonId"
     fun pieceEditor(pieceId: Long) = "piece_editor/$pieceId"
@@ -151,6 +157,12 @@ fun PianoKidsApp() {
                             launchSingleTop = true
                         }
                     },
+                    onNavigateParent = {
+                        navController.navigate(Routes.PARENT)
+                    },
+                    onNavigateChallenge = {
+                        navController.navigate(Routes.CHALLENGE)
+                    },
                 )
             }
             composable(Routes.LEARN) {
@@ -171,7 +183,11 @@ fun PianoKidsApp() {
                 )
             }
             composable(Routes.PET) {
-                PetScreen()
+                PetScreen(
+                    onNavigateToShop = {
+                        navController.navigate(Routes.COSMETIC_SHOP)
+                    },
+                )
             }
             composable(
                 route = Routes.LESSON,
@@ -218,6 +234,21 @@ fun PianoKidsApp() {
                         // 拍照识谱识别完成后，进入编辑器新建乐谱
                         navController.navigate(Routes.pieceEditor(-1L))
                     },
+                )
+            }
+            composable(Routes.COSMETIC_SHOP) {
+                CosmeticShopScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.PARENT) {
+                ParentScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.CHALLENGE) {
+                ChallengeScreen(
+                    onBack = { navController.popBackStack() },
                 )
             }
         }
