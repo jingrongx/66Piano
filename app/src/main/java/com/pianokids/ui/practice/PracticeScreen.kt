@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +62,8 @@ import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.Warning
 import com.pianokids.ui.theme.Wrong
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 
 /**
  * 练琴界面。
@@ -131,12 +134,16 @@ private fun SongListScreen(
     onCreateNew: () -> Unit,
     onScan: () -> Unit,
 ) {
+    val windowClass = rememberWindowClass()
+    val useTwoColumns = windowClass != WindowClass.COMPACT
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .statusBarsPadding()
+            .padding(horizontal = if (windowClass == WindowClass.COMPACT) 16.dp else 24.dp)
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = "选择一首曲目",
@@ -175,15 +182,47 @@ private fun SongListScreen(
 
         // 内置曲目
         SectionHeader("🎵 内置曲目")
-        builtinSongs.forEach { song ->
-            SongCard(song = song, accentColor = Primary, onSelect = onSelect)
+        if (useTwoColumns) {
+            builtinSongs.chunked(2).forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    pair.forEach { song ->
+                        SongCard(song = song, accentColor = Primary, onSelect = onSelect, modifier = Modifier.weight(1f))
+                    }
+                    if (pair.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        } else {
+            builtinSongs.forEach { song ->
+                SongCard(song = song, accentColor = Primary, onSelect = onSelect)
+            }
         }
 
         // 自定义曲目
         if (customSongs.isNotEmpty()) {
             SectionHeader("✏️ 我的乐谱")
-            customSongs.forEach { song ->
-                SongCard(song = song, accentColor = Tertiary, onSelect = onSelect)
+            if (useTwoColumns) {
+                customSongs.chunked(2).forEach { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        pair.forEach { song ->
+                            SongCard(song = song, accentColor = Tertiary, onSelect = onSelect, modifier = Modifier.weight(1f))
+                        }
+                        if (pair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                customSongs.forEach { song ->
+                    SongCard(song = song, accentColor = Tertiary, onSelect = onSelect)
+                }
             }
         } else {
             Card(
@@ -261,10 +300,10 @@ private fun SongCard(
     song: SongItem,
     accentColor: Color,
     onSelect: (SongItem) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clickable { onSelect(song) },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = accentColor),

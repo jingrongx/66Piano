@@ -62,6 +62,8 @@ import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.Wrong
 import com.pianokids.ui.theme.YellowLight
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 
 /**
  * 闯关大冒险页面。
@@ -110,12 +112,13 @@ fun ChallengeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(vertical = 12.dp),
         ) {
             // 顶部展示当前最高分
             HighScoreCard(highScore = highScore)
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             when {
                 uiState.mode == ChallengeMode.IDLE -> {
@@ -324,7 +327,7 @@ private fun GameRunningContent(
         color = Primary,
         trackColor = MaterialTheme.colorScheme.surfaceVariant,
     )
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
     when (state.mode) {
         ChallengeMode.EAR_TRAINING -> EarTrainingContent(state, onAnswer, onReplay)
@@ -341,6 +344,8 @@ private fun EarTrainingContent(
     onReplay: () -> Unit,
 ) {
     val question = state.question ?: return
+    val windowClass = rememberWindowClass()
+    val optionHeight = if (windowClass == WindowClass.COMPACT) 80.dp else 72.dp
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -408,7 +413,7 @@ private fun EarTrainingContent(
                 onClick = { onAnswer(midi) },
                 modifier = Modifier
                     .weight(1f)
-                    .height(80.dp),
+                    .height(optionHeight),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = feedbackColor),
             ) {
@@ -463,7 +468,7 @@ private fun RhythmContent(
             }
         }
     }
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(16.dp))
     Button(
         onClick = onTap,
         modifier = Modifier

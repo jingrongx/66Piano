@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,8 @@ import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.YellowLight
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 
 /**
  * 豆豆宠物界面。
@@ -62,125 +65,265 @@ fun PetScreen(
     val expInLevel = petExp % PetViewModel.EXP_PER_LEVEL
     val expProgress = expInLevel.toFloat() / PetViewModel.EXP_PER_LEVEL
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            text = "我的豆豆",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold,
-        )
+    val windowClass = rememberWindowClass()
+    val useLandscapeLayout = windowClass != WindowClass.COMPACT
 
-        // 大大的豆豆形象
-        Box(
+    if (useLandscapeLayout) {
+        // 横屏宽屏：左宠物形象 / 右信息卡片
+        Row(
             modifier = Modifier
-                .size(200.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(YellowLight, Secondary, PinkSoft),
-                    ),
-                ),
-            contentAlignment = Alignment.Center,
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Text(text = petEmoji, fontSize = 100.sp)
-        }
-
-        // 等级
-        Text(
-            text = "Lv. $petLevel",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold,
-        )
-
-        // 经验条
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
+            // 左侧：宠物形象 + 等级
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = "经验值",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "$expInLevel / ${PetViewModel.EXP_PER_LEVEL}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                LinearProgressIndicator(
-                    progress = { expProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(12.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    color = Primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
                 Text(
-                    text = "再练 ${PetViewModel.EXP_PER_LEVEL - expInLevel} 经验就能升级啦！",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "我的豆豆",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
+                )
+                // 豆豆形象（缩小一点适应横屏）
+                Box(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(YellowLight, Secondary, PinkSoft),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = petEmoji, fontSize = 80.sp)
+                }
+                Text(
+                    text = "Lv. $petLevel",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
                 )
             }
-        }
+            // 右侧：经验条 + 互动语 + 装扮按钮
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // 经验条
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "经验值",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = "$expInLevel / ${PetViewModel.EXP_PER_LEVEL}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { expProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(12.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                            color = Primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        )
+                        Text(
+                            text = "再练 ${PetViewModel.EXP_PER_LEVEL - expInLevel} 经验就能升级啦！",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
-        // 一句话互动
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Tertiary.copy(alpha = 0.15f)),
+                // 一句话互动
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Tertiary.copy(alpha = 0.15f)),
+                ) {
+                    Text(
+                        text = "豆豆在等你练习呢！",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                    )
+                }
+
+                // 装扮商店入口
+                Button(
+                    onClick = onNavigateToShop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Checkroom,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "装扮商店",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                }
+            }
+        }
+    } else {
+        // 竖屏：保持单列垂直堆叠布局
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "豆豆在等你练习呢！",
-                style = MaterialTheme.typography.titleMedium,
+                text = "我的豆豆",
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
+            )
+
+            // 大大的豆豆形象
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(YellowLight, Secondary, PinkSoft),
+                        ),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = petEmoji, fontSize = 100.sp)
+            }
+
+            // 等级
+            Text(
+                text = "Lv. $petLevel",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+            )
+
+            // 经验条
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "经验值",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = "$expInLevel / ${PetViewModel.EXP_PER_LEVEL}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { expProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                        color = Primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                    Text(
+                        text = "再练 ${PetViewModel.EXP_PER_LEVEL - expInLevel} 经验就能升级啦！",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // 一句话互动
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Tertiary.copy(alpha = 0.15f)),
+            ) {
+                Text(
+                    text = "豆豆在等你练习呢！",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                )
+            }
+
+            // 装扮商店入口
+            Button(
+                onClick = onNavigateToShop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-            )
-        }
-
-        // 装扮商店入口
-        Button(
-            onClick = onNavigateToShop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Primary),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Checkroom,
-                contentDescription = null,
-                tint = Color.White,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "装扮商店",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-            )
+                    .height(56.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Checkroom,
+                    contentDescription = null,
+                    tint = Color.White,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "装扮商店",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                )
+            }
         }
     }
 }
