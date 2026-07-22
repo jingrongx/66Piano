@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,6 +71,8 @@ import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.Warning
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,6 +94,8 @@ fun ParentScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var showPinDialog by remember { mutableStateOf(false) }
+    val windowClass = rememberWindowClass()
+    val useTwoColumns = windowClass != WindowClass.COMPACT
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -106,9 +111,11 @@ fun ParentScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = if (windowClass == WindowClass.COMPACT) 16.dp else 24.dp)
+                .padding(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // 顶部
             Row(
@@ -147,26 +154,60 @@ fun ParentScreen(
                 }
             } else {
                 // 解锁后：统计 + 设置
-                OverviewCard(
-                    stars = uiState.totalStars,
-                    petLevel = uiState.petLevel,
-                    petExp = uiState.petExp,
-                    streakDays = uiState.streakDays,
-                    totalPracticeMs = uiState.totalPracticeMs,
-                    averageAccuracy = uiState.averageAccuracy,
-                )
-
-                DailyGoalCard(
-                    current = uiState.dailyGoalMinutes,
-                    onChange = viewModel::setDailyGoal,
-                )
-
-                TtsToggleCard(
-                    enabled = uiState.ttsEnabled,
-                    onToggle = viewModel::toggleTts,
-                )
-
-                RecentSessionsCard(sessions = uiState.recentSessions)
+                if (useTwoColumns) {
+                    // 横屏：左右两列
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            OverviewCard(
+                                stars = uiState.totalStars,
+                                petLevel = uiState.petLevel,
+                                petExp = uiState.petExp,
+                                streakDays = uiState.streakDays,
+                                totalPracticeMs = uiState.totalPracticeMs,
+                                averageAccuracy = uiState.averageAccuracy,
+                            )
+                            DailyGoalCard(
+                                current = uiState.dailyGoalMinutes,
+                                onChange = viewModel::setDailyGoal,
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            TtsToggleCard(
+                                enabled = uiState.ttsEnabled,
+                                onToggle = viewModel::toggleTts,
+                            )
+                            RecentSessionsCard(sessions = uiState.recentSessions)
+                        }
+                    }
+                } else {
+                    // 竖屏：单列
+                    OverviewCard(
+                        stars = uiState.totalStars,
+                        petLevel = uiState.petLevel,
+                        petExp = uiState.petExp,
+                        streakDays = uiState.streakDays,
+                        totalPracticeMs = uiState.totalPracticeMs,
+                        averageAccuracy = uiState.averageAccuracy,
+                    )
+                    DailyGoalCard(
+                        current = uiState.dailyGoalMinutes,
+                        onChange = viewModel::setDailyGoal,
+                    )
+                    TtsToggleCard(
+                        enabled = uiState.ttsEnabled,
+                        onToggle = viewModel::toggleTts,
+                    )
+                    RecentSessionsCard(sessions = uiState.recentSessions)
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 

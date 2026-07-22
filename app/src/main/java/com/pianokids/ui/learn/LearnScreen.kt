@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +42,8 @@ import com.pianokids.ui.theme.OnSurface
 import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.SurfaceVariant
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 
 /**
  * 学习路径界面。
@@ -55,13 +58,17 @@ fun LearnScreen(
     viewModel: LearnViewModel = hiltViewModel(),
 ) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
+    val windowClass = rememberWindowClass()
+    val useTwoColumns = windowClass != WindowClass.COMPACT
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .statusBarsPadding()
+            .padding(horizontal = if (windowClass == WindowClass.COMPACT) 16.dp else 24.dp)
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = "学习路径",
@@ -72,13 +79,37 @@ fun LearnScreen(
 
         viewModel.levels.forEach { section ->
             LevelHeader(section)
-            section.lessons.forEach { lesson ->
-                LessonCard(
-                    lesson = lesson,
-                    stars = progress[lesson.id] ?: 0,
-                    unlocked = viewModel.isUnlocked(lesson.id),
-                    onClick = { onLessonClick(lesson.id) },
-                )
+            if (useTwoColumns) {
+                // 横屏：每两个 lesson 一行
+                section.lessons.chunked(2).forEach { lessonPair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        lessonPair.forEach { lesson ->
+                            LessonCard(
+                                lesson = lesson,
+                                stars = progress[lesson.id] ?: 0,
+                                unlocked = viewModel.isUnlocked(lesson.id),
+                                onClick = { onLessonClick(lesson.id) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        // 奇数个时补一个空 Spacer 占位
+                        if (lessonPair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                section.lessons.forEach { lesson ->
+                    LessonCard(
+                        lesson = lesson,
+                        stars = progress[lesson.id] ?: 0,
+                        unlocked = viewModel.isUnlocked(lesson.id),
+                        onClick = { onLessonClick(lesson.id) },
+                    )
+                }
             }
         }
     }
@@ -125,10 +156,10 @@ private fun LessonCard(
     stars: Int,
     unlocked: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clickable(enabled = unlocked) { onClick() }
             .alpha(if (unlocked) 1f else 0.5f),
         shape = RoundedCornerShape(20.dp),

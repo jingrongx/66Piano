@@ -6,12 +6,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,8 @@ import com.pianokids.ui.theme.OnSurface
 import com.pianokids.ui.theme.Surface
 import com.pianokids.ui.theme.Warning
 import com.pianokids.ui.theme.Wrong
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -84,43 +88,95 @@ fun TunerScreen(
         else -> "差得有点多哦"
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        // 顶部提示
-        Text(
-            text = if (isSilent) "弹一个音，看看准不准" else feedbackText,
-            style = MaterialTheme.typography.headlineSmall,
-            color = feedbackColor,
-            fontWeight = FontWeight.Bold,
-        )
+    val windowClass = rememberWindowClass()
+    val useLandscapeLayout = windowClass != WindowClass.COMPACT
+    val gaugeSize = if (windowClass == WindowClass.COMPACT) 240.dp else 280.dp
 
-        // 大圆形仪表盘
-        TunerGauge(
-            centsOff = if (isSilent) 0f else centsOff,
-            noteName = noteName,
-            color = feedbackColor,
-            modifier = Modifier.size(300.dp),
-        )
-
-        // 底部频率
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    if (useLandscapeLayout) {
+        // 横屏宽屏：仪表盘与信息左右排布
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            // 左侧：仪表盘
+            TunerGauge(
+                centsOff = if (isSilent) 0f else centsOff,
+                noteName = noteName,
+                color = feedbackColor,
+                modifier = Modifier.size(gaugeSize),
+            )
+            // 右侧：提示 + 频率
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = if (isSilent) "弹一个音，看看准不准" else feedbackText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = feedbackColor,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (isSilent) "等待演奏…" else "${freq.toInt()} Hz",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (!isSilent) {
+                    Text(
+                        text = "音分偏差：${"%+.1f".format(centsOff)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = feedbackColor,
+                    )
+                }
+            }
+        }
+    } else {
+        // 竖屏：保持垂直堆叠
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            // 顶部提示
             Text(
-                text = if (isSilent) "等待演奏…" else "${freq.toInt()} Hz",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = if (isSilent) "弹一个音，看看准不准" else feedbackText,
+                style = MaterialTheme.typography.headlineSmall,
+                color = feedbackColor,
                 fontWeight = FontWeight.Bold,
             )
-            if (!isSilent) {
+
+            // 大圆形仪表盘
+            TunerGauge(
+                centsOff = if (isSilent) 0f else centsOff,
+                noteName = noteName,
+                color = feedbackColor,
+                modifier = Modifier.size(gaugeSize),
+            )
+
+            // 底部频率
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "音分偏差：${"%+.1f".format(centsOff)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = feedbackColor,
+                    text = if (isSilent) "等待演奏…" else "${freq.toInt()} Hz",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
                 )
+                if (!isSilent) {
+                    Text(
+                        text = "音分偏差：${"%+.1f".format(centsOff)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = feedbackColor,
+                    )
+                }
             }
         }
     }

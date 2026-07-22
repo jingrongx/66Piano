@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +49,8 @@ import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
 import com.pianokids.ui.theme.Tertiary
 import com.pianokids.ui.theme.YellowLight
+import com.pianokids.ui.util.WindowClass
+import com.pianokids.ui.util.rememberWindowClass
 
 /**
  * 首页：问候语 + 豆豆头像 + 今日任务 + 星星 + 打卡 + 最近练习 + 闯关入口 + 家长区入口。
@@ -73,15 +75,18 @@ fun HomeScreen(
     val greeting = viewModel.greeting()
     val petEmoji = viewModel.petEmoji(petLevel)
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val windowClass = rememberWindowClass()
+    // 横屏 + MEDIUM/EXPANDED 时使用双列，充分利用横向空间
+    val useTwoColumns = windowClass != WindowClass.COMPACT
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .statusBarsPadding()
+            .padding(horizontal = if (windowClass == WindowClass.COMPACT) 16.dp else 24.dp)
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (windowClass == WindowClass.COMPACT) 16.dp else 12.dp),
     ) {
         // 顶部：问候语 + 豆豆头像
         Row(
@@ -118,8 +123,8 @@ fun HomeScreen(
             }
         }
 
-        if (isLandscape) {
-            // 横屏：左右两列
+        if (useTwoColumns) {
+            // 横屏：左右两列，充分利用上部空间
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -127,7 +132,7 @@ fun HomeScreen(
                 // 左列：今日任务 + 数据
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     TodayTaskCard(onNavigateLearn)
                     StatsRow(totalStars, streakDays)
@@ -135,7 +140,7 @@ fun HomeScreen(
                 // 右列：最近练习 + 闯关入口 + 家长区入口
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     RecentPracticeCard(onNavigatePractice)
                     ChallengeCard(onNavigateChallenge)

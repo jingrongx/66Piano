@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -54,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pianokids.ui.theme.Correct
 import com.pianokids.ui.theme.Primary
 import com.pianokids.ui.theme.Secondary
+import com.pianokids.ui.util.rememberAdaptiveGridColumns
 
 /**
  * 装扮商店界面。
@@ -71,6 +73,7 @@ fun CosmeticShopScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingPurchase by remember { mutableStateOf<Cosmetic?>(null) }
+    val gridColumns = rememberAdaptiveGridColumns()
 
     // 一次性消息显示为 snackbar
     LaunchedEffect(uiState.message) {
@@ -87,6 +90,7 @@ fun CosmeticShopScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .statusBarsPadding()
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -130,7 +134,7 @@ fun CosmeticShopScreen(
 
             // 装扮网格
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Fixed(gridColumns),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
